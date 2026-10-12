@@ -14,7 +14,7 @@ Expo 일반 규칙은 `AGENTS.md`도 함께 따른다 (Expo API는 기억으로 
 - 서버: Supabase (서울 리전) — Postgres + RLS, Auth, Storage, Edge Functions, pg_cron
 - 푸시: Expo Notifications (Edge Function에서 Expo 푸시 서비스 호출)
 - 빌드: EAS Build / Submit
-- 로그인: 카카오(이메일 동의 항목 없이, 브라우저 방식), 구글(브라우저 방식), 애플(네이티브),
+- 로그인: 카카오(이메일은 선택 동의, 브라우저 방식), 구글(브라우저 방식), 애플(네이티브),
   이메일(메일로 받은 6자리 코드, 비밀번호 없음),
   Supabase 익명 로그인(가입 없이 숫자 코드로 연결한 쉬운 모드 사용자)
 - 메일 발송: 외부 SMTP(Resend). Supabase 기본 메일 서버는 실서비스에 쓰지 않는다.
@@ -58,6 +58,8 @@ supabase/tests      RLS 테스트 (pgTAP)
 - 업로드 순서: posts(status=uploading) 생성 → 파일 업로드 → media 행 → post_groups → status=ready.
   ready가 아닌 묶음은 다른 사람에게 보이지 않는다.
 - '봤어요'는 `post_views`에 (묶음, 사용자, 날짜) 한 줄. 같은 날 여러 번 봐도 한 줄.
+- 표시 이름: 가입 시 카카오·구글 이름이 `profiles.display_name` 기본값. 그룹 만들기·합류 화면에서 미리 채워 고칠 수 있게 하고, 그룹별 이름(`members.display_name`)은 `set_my_display_name`으로 언제든 본인이 바꾼다.
+- 그룹 만들기는 `create_group` RPC로만 한다 (`groups`에 직접 insert 금지).
 - 활동(앱 실행·시청·반응·보내기) 때마다 `profiles.last_active_at`을 갱신한다. 위젯 노출은 활동이 아니다.
 - 숫자 집계(본 사람 수, 하트 수)는 화면에 표시하지 않는다. 이름·얼굴만 보여준다.
 
@@ -116,8 +118,8 @@ npx expo start                      # 개발 서버 (아이폰 Expo Go로 QR 스
 npx expo install <패키지>            # 패키지 추가
 npx tsc --noEmit                    # 타입 검사
 npx expo run:ios                    # 개발 빌드 (위젯·네이티브 모듈 필요 시)
-supabase db push                    # 마이그레이션을 원격 DB에 적용 (2단계부터)
-supabase test db                    # RLS 테스트
+npx supabase db push                # 마이그레이션을 원격 DB에 적용 (2단계부터)
+npx supabase test db                # RLS 테스트 (Docker 필요. 없으면 Claude가 클라우드에서 검증)
 eas build --profile preview         # 기기 테스트용 빌드
 ```
 
