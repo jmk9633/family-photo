@@ -8,13 +8,24 @@ import { LoginCancelled } from './errors';
 WebBrowser.maybeCompleteAuthSession();
 
 /**
+ * 로그인 후 돌아올 주소. Expo Go에서도 앱 스킴(familyphoto://)을 그대로 쓴다.
+ * - Supabase는 IP 주소로 된 주소(exp://192.168.x.x:8081/...)를 보안상 항상 거부하고
+ *   기본 주소(localhost)로 보내버린다. 그래서 Expo Go 기본 주소는 쓸 수 없다.
+ * - iOS의 로그인 창(ASWebAuthenticationSession)은 이 주소로 이동하는 순간을 직접 잡아서 닫히므로,
+ *   Expo Go에 familyphoto 스킴이 등록돼 있지 않아도 동작한다.
+ * - 개발 빌드·실제 앱에서도 같은 주소라 설정을 바꿀 필요가 없다.
+ *   (Android Expo Go에서는 동작하지 않는다. Android는 개발 빌드부터 테스트한다.)
+ */
+const REDIRECT_TO = 'familyphoto://auth/callback';
+
+/**
  * 카카오·구글 로그인 (브라우저 방식).
  * 1) Supabase가 만든 로그인 주소를 앱 안 브라우저로 연다.
- * 2) 로그인이 끝나면 familyphoto://auth/callback?code=... (Expo Go에서는 exp://...)로 돌아온다.
+ * 2) 로그인이 끝나면 familyphoto://auth/callback?code=... 로 돌아온다.
  * 3) code를 세션으로 바꾼다.
  */
 async function signInWithBrowser(provider: 'kakao' | 'google') {
-  const redirectTo = Linking.createURL('auth/callback');
+  const redirectTo = REDIRECT_TO;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
