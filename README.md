@@ -1,56 +1,33 @@
-# Welcome to your Expo app 👋
+# 가족 사진 (가칭)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+가족이 보낸 사진·영상을 부모님이 폰과 TV에서 쉽게 보는 가족 공유 앱.
+AI 작업 규칙은 [CLAUDE.md](./CLAUDE.md)에 있다.
 
-## Get started
+## 처음 실행하기 (맥 + 아이폰)
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+준비물: 맥에 Node.js 20 이상, 아이폰에 App Store의 **Expo Go** 앱.
 
 ```bash
-npm run reset-project
+# 1. 코드 받기 (처음 한 번)
+git clone https://github.com/jmk9633/family-photo.git
+cd family-photo
+
+# 2. 패키지 설치 (처음 한 번, 그리고 package.json이 바뀔 때마다)
+npm install
+
+# 3. 비밀 값 파일 만들기 (처음 한 번)
+cp .env.example .env
+open -e .env        # 텍스트 편집기로 열어 Supabase 주소와 키를 붙여 넣고 저장
+
+# 4. 실행
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+터미널에 QR 코드가 뜨면 아이폰 **카메라 앱**으로 찍고, 뜨는 알림을 눌러 Expo Go로 연다.
+맥과 아이폰이 **같은 와이파이**에 있어야 한다.
 
-### Other setup steps
+코드를 새로 받을 때는 `git pull` 후 `npm install`, 그리고 `npx expo start`.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## 지금 단계
 
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+1단계: 세팅과 로그인 (카카오·구글·애플·이메일 6자리 코드, 앱을 다시 열어도 로그인 유지).

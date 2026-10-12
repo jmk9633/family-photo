@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# 비밀 값 (절대 커밋하지 않음)
+.env
