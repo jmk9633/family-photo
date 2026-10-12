@@ -128,6 +128,13 @@ eas build --profile preview         # 기기 테스트용 빌드
 8. 홈 화면 위젯 (iOS부터)
 9. TV 앱 (삼성 Tizen부터)
 
+## 알려진 제약
+- 애플 로그인은 Expo Go에서 동작하지 않는다 (isAvailableAsync가 false). 애플 개발자 유료 등록 후 개발 빌드에서 확인한다.
+  그때 Supabase Apple Client IDs에 실제 번들 ID를 넣는다.
+- 카카오·구글 로그인 복귀 주소는 `familyphoto://auth/callback` 고정 (Supabase가 IP 주소 복귀를 거부하므로 Expo Go 기본 주소를 쓰지 않는다).
+  Android Expo Go에서는 이 방식이 동작하지 않으므로 Android는 개발 빌드부터 테스트한다.
+- Supabase 카카오는 이메일 동의항목을 항상 요청한다. 카카오 앱은 비즈 앱(개인 개발자)으로 전환하고 이메일은 '선택 동의'로 둔다.
+
 ## 지금 하지 않는 것 (MVP 범위 밖)
 - 설치 후 자동 연결(디퍼드 딥링크) — 숫자 코드가 주 경로
 - 네이버 로그인, 휴대폰 번호 로그인 (2차)
