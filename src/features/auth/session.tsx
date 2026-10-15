@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
+import { clearSignedUrls } from '@/lib/signedUrl';
 import { supabase } from '@/lib/supabase';
 
 type SessionState = {
@@ -21,7 +22,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
 
     // 로그인·로그아웃·토큰 갱신 때마다 상태를 맞춘다.
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      // 로그아웃하면 이전 계정으로 받은 사진 주소를 버린다
+      if (event === 'SIGNED_OUT') clearSignedUrls();
       setState({ session, isLoading: false });
     });
     return () => data.subscription.unsubscribe();

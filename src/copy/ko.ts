@@ -40,14 +40,63 @@ export const ko = {
     join: '초대 코드로 들어가기',
     joinHint: '가족에게 받은 6자리 코드가 있어요',
   },
-  // 임시 홈 (4단계에서 사진 타임라인으로 바뀐다)
-  home: {
+  // 일반 모드 하단 탭
+  tabs: {
+    photos: '사진',
+    album: '앨범',
+    send: '보내기',
+    family: '가족',
+    me: '내 정보',
+  },
+  family: {
     title: '내 가족 그룹',
-    note: '보낸 사진 보기는 다음 단계에서 이 화면에 생겨요.',
-    send: '사진 보내기',
     create: '새 그룹 만들기',
     join: '초대 코드로 들어가기',
+  },
+  me: {
+    title: '내 정보',
     signOut: '로그아웃',
+  },
+  // 사진 탭 월별 타임라인 (F-FRFNRL)
+  feed: {
+    allGroups: '모든 가족',
+    groupButton: (name: string) => `${name} 사진 보는 중. 다른 가족 고르기`,
+    chooseGroup: '어느 가족 사진을 볼까요?',
+    monthCount: (n: number) => `묶음 ${n}개`,
+    unknownSender: '가족',
+    more: (n: number) => `+${n}`,
+    moreLabel: (n: number) => `사진 ${n}장 더 보기`,
+    photoLabel: (i: number) => `${i}번째 사진 크게 보기`,
+    videoLabel: (i: number, length: string) => `${i}번째 영상, ${length}, 크게 보기`,
+    emptyTitle: '아직 사진이 없어요',
+    emptyText: '첫 사진을 보내 볼까요?\n가족이 들어오면 바로 볼 수 있어요.',
+    emptySend: '첫 사진 보내기',
+    loadMoreFailed: '더 불러오지 못했어요',
+  },
+  // 사진 상세 (크게 보기)
+  detail: {
+    close: '닫기',
+    prev: '이전',
+    next: '다음',
+    position: (i: number, n: number) => `${i} / ${n}`,
+    photoLabel: (i: number, n: number) => `사진 ${n}장 중 ${i}번째`,
+    loadFailed: '사진을 불러오지 못했어요',
+    gone: '볼 수 없는 사진이에요.\n보낸 사람이 지웠거나 그룹에서 나갔을 수 있어요.',
+  },
+  // 앨범 탭 (F-HEETWR)
+  album: {
+    title: '앨범',
+    byMonth: '월별',
+    bySender: '보낸 사람',
+    byTag: '태그',
+    count: (posts: number, media: number) => `묶음 ${posts}개 · ${media}장`,
+    noTags: '보낼 때 태그를 붙이면 여기에 모여요',
+    empty: '아직 사진이 없어요',
+  },
+  date: {
+    month: (y: number, m: number) => `${y}년 ${m}월`,
+    day: (m: number, d: number) => `${m}월 ${d}일`,
+    dayWithYear: (y: number, m: number, d: number) => `${y}년 ${m}월 ${d}일`,
   },
   groupNew: {
     title: '새 그룹 만들기',

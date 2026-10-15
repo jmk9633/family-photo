@@ -55,6 +55,7 @@ supabase/tests      RLS 테스트 (pgTAP)
 - 역할 태그: `is_admin`, `easy_mode`, `wellbeing_check`. 관계 이름(부모님, 자녀)을 코드나 DB에 쓰지 않는다.
 - 묶음 = `posts` (한 번 보낸 사진 묶음). 여러 그룹에 보내도 `posts` 1행 + `post_groups` 여러 행.
 - 저장 경로: `posts/{post_id}/{media_id}.jpg`, 썸네일 `posts/{post_id}/{media_id}_thumb.jpg`.
+  영상은 `posts/{post_id}/{media_id}.mp4`, 썸네일(대표 프레임)은 사진과 같은 `_thumb.jpg`.
 - 업로드 순서: posts(status=uploading) 생성 → 파일 업로드 → media 행 → post_groups → status=ready.
   ready가 아닌 묶음은 다른 사람에게 보이지 않는다.
 - '봤어요'는 `post_views`에 (묶음, 사용자, 날짜) 한 줄. 같은 날 여러 번 봐도 한 줄.
@@ -62,6 +63,9 @@ supabase/tests      RLS 테스트 (pgTAP)
 - 그룹 만들기는 `create_group` RPC로만 한다 (`groups`에 직접 insert 금지).
 - 활동(앱 실행·시청·반응·보내기) 때마다 `profiles.last_active_at`을 갱신한다. 위젯 노출은 활동이 아니다.
 - 숫자 집계(본 사람 수, 하트 수)는 화면에 표시하지 않는다. 이름·얼굴만 보여준다.
+- 목록은 `ready` 묶음만, 같은 묶음은 '모든 가족'에서 한 번만 (posts 1행 + 내가 볼 수 있는 post_groups만 딸려 옴).
+- 앨범 카드·월 제목의 묶음 수는 앱이 세지 않고 `album_months` / `album_senders` / `album_tags` (0002, security invoker)로 센다.
+- 보낸 사람 이름: 특정 그룹을 보면 그 그룹의 이름, '모든 가족'이면 그 묶음을 받은 그룹 중 내가 먼저 들어간 그룹의 이름.
 
 ## 정해진 값 (바꾸려면 먼저 질문)
 | 항목 | 값 | 어디서 강제 |
@@ -71,7 +75,8 @@ supabase/tests      RLS 테스트 (pgTAP)
 | 초대 재발급 | 그 초대 한 건만 취소 후 새 코드. 취소 코드 입력 시 `revoked` → "새 코드로 바뀌었어요" | `reissue_invite` |
 | 코드 입력 제한 | 10분에 5번 | `redeem_invite` → `too_many_attempts` |
 | 한 묶음 | 사진·영상 합쳐 30장 | `media` 트리거 `too_many_media` |
-| 영상·영상 한마디 | 최대 1분 | 앱에서 고르기 제한 + `media.duration_sec` 검사 |
+| 영상·영상 한마디 | 최대 1분 | 앱: 고르기 버튼 아래 안내 + 고른 뒤 길이 검사로 빼고 알림, DB: `media.duration_sec` 검사 |
+| 서명 URL | 유효 1시간, 10분 남으면 새로 받음. 화면에는 `cacheKey = 저장 경로`로 넘김 | `src/lib/signedUrl.ts` |
 | 끝나지 않은 업로드 | 24시간 뒤 묶음과 파일 삭제 | Edge Function (예약) |
 | 쉬운 모드 자동 넘김 | 폰은 '쭉 보기'를 눌렀을 때만, 8초. TV는 자동 8초 | 앱 |
 | '봤어요' | 묶음에서 한 장이라도 보면 기록 | 앱 → `post_views` |
@@ -88,7 +93,9 @@ supabase/tests      RLS 테스트 (pgTAP)
 
 ## 이미지·영상 처리 (앱에서)
 - 사진: 긴 변 2048px 이하 JPEG(품질 0.8), 썸네일 긴 변 480px.
-- 영상: 1분을 넘으면 고를 수 없게 하고, 압축 후 대표 프레임 썸네일을 함께 올린다.
+- 영상: 시스템 사진 고르기 화면은 길이로 거를 수 없다(PHPickerFilter에 길이 필터 없음). 그래서 고르기 버튼 아래에
+  '영상은 1분까지 보낼 수 있어요'를 항상 보여주고, 1분 넘는 영상은 고른 뒤 빼고 'N개는 빠졌어요'로 알린다 (10/15 결정).
+  압축: 긴 변 1280px(720p), 비트레이트 약 2.5~4Mbps. 압축 후 대표 프레임 썸네일(긴 변 480px)을 함께 올린다.
   영상 압축은 네이티브 모듈(예: react-native-compressor)이 필요하므로 4단계부터는 Expo Go가 아니라 개발 빌드로 테스트한다.
 - Supabase 이미지 변환 기능은 쓰지 않는다 (비용).
 - 목록·위젯·타임라인은 항상 썸네일, 원본은 크게 볼 때만 불러온다.
@@ -125,9 +132,11 @@ eas build --profile preview         # 기기 테스트용 빌드
 ```
 
 ## 개발 단계
-1. 세팅과 로그인 ← 지금
-2. 그룹 만들기·초대 (이때 `supabase/` 마이그레이션 적용)
-3~7. 보내기, 보기, 반응·'봤어요', 쉬운 모드 연결, 안부 확인 (MVP)
+1. 세팅과 로그인 (완료)
+2. 그룹 만들기·초대 (완료)
+3. 보내기 — 사진 (완료)
+4. 보기 + 영상 보내기 ← 지금 (하단 탭, 월별 타임라인, 사진 상세, 앨범 / 영상 압축·재생)
+5~7. 반응·'봤어요', 쉬운 모드 연결, 안부 확인 (MVP)
 8. 홈 화면 위젯 (iOS부터)
 9. TV 앱 (삼성 Tizen부터)
 
