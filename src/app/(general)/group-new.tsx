@@ -12,8 +12,7 @@ import { createGroup, getMyDefaultName } from '@/features/groups/api';
 import { cleanName, GROUP_NAME_MAX, NAME_MAX, toGroupErrorMessage } from '@/features/groups/format';
 
 // 그룹 이름 + 이 그룹에서 보일 내 이름(카카오·구글 이름을 미리 채워 고칠 수 있게).
-// 만들면 바로 초대 화면으로 가고, 거기서 '나중에'를 고를 수 있다.
-// (명세의 '첫 사진 미리 보내기'는 3단계 사진 보내기와 함께 넣는다)
+// 만들면 '첫 사진 미리 보내기'(건너뛸 수 있음) → 초대 화면('나중에' 가능) 순서로 간다 (F-PWMFRH).
 export default function GroupNewScreen() {
   const { session } = useSession();
   const [name, setName] = useState('');
@@ -36,7 +35,7 @@ export default function GroupNewScreen() {
     setError(null);
     try {
       const groupId = await createGroup(cleanName(name), cleanName(myName));
-      router.replace({ pathname: '/group/[id]/invite', params: { id: groupId, first: '1' } });
+      router.replace({ pathname: '/send', params: { group: groupId, first: '1' } });
     } catch (e) {
       setError(toGroupErrorMessage(e));
     } finally {

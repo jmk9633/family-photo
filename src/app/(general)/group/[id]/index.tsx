@@ -149,6 +149,11 @@ export default function GroupScreen() {
           </View>
         ) : null}
 
+        <Button
+          label={ko.group.send}
+          onPress={() => router.push({ pathname: '/send', params: { group: id } })}
+        />
+
         {notice ? (
           <Text style={styles.notice} accessibilityLiveRegion="polite">
             {notice}

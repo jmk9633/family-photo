@@ -24,7 +24,13 @@
         }
       ],
       "expo-apple-authentication",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "가족에게 보낼 사진을 고르려면 사진 보관함 접근을 허용해 주세요."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

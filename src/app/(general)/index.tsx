@@ -9,9 +9,9 @@ import { ko } from '@/copy/ko';
 import { signOut, useSession } from '@/features/auth/session';
 import { listMyGroups, type Group } from '@/features/groups/api';
 
-// 2단계 임시 홈.
-// 그룹이 없으면 '새 그룹 만들기 / 초대 코드로 들어가기'를 크게, 있으면 그룹 목록을 보여준다.
-// 4단계에서 사진 타임라인으로 바뀐다.
+// 임시 홈.
+// 그룹이 없으면 '새 그룹 만들기 / 초대 코드로 들어가기'를 크게, 있으면 그룹 목록과 '사진 보내기'를 보여준다.
+// 4단계에서 사진 타임라인(하단 가운데 '보내기')으로 바뀐다.
 export default function HomeScreen() {
   const { session } = useSession();
   const userId = session?.user.id ?? '';
@@ -105,7 +105,8 @@ export default function HomeScreen() {
         <Text style={styles.note}>{ko.home.note}</Text>
       </ScrollView>
       <View style={styles.actions}>
-        <Button label={ko.home.create} onPress={() => router.push('/group-new')} />
+        <Button label={ko.home.send} onPress={() => router.push('/send')} />
+        <Button variant="outline" label={ko.home.create} onPress={() => router.push('/group-new')} />
         <Button variant="outline" label={ko.home.join} onPress={() => router.push('/join')} />
         {signOutButton}
       </View>
