@@ -1,4 +1,5 @@
 import { File } from 'expo-file-system';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
 import { uuidv4 } from '@/lib/id';
 import { preparePhoto } from '@/lib/image';
@@ -15,6 +16,7 @@ import {
   uploadFile,
   type MediaRow,
 } from './api';
+import { classifyPrepare, classifyRemote, isPermanent, SendError } from './sendErrors';
 
 // 묶음 보내기 순서와 자동 재시도.
 // 실패하면 SendJob을 그대로 들고 있다가 '다시 보내기'로 이어서 보낸다
@@ -67,7 +69,11 @@ export function newSendJob(
 
 const RETRY_DELAYS_MS = [1000, 3000, 8000]; // 처음 실패 뒤 3번 더 시도
 
-async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+/**
+ * 서버와 주고받는 일을 자동으로 다시 시도한다. 다시 해도 같은 실패(권한, 파일 한도)는 바로 멈춘다.
+ * 끝까지 실패하면 원인을 담은 SendError를 던진다. itemIndex = 그 일이 어느 장의 일인지.
+ */
+async function withRetry<T>(fn: () => Promise<T>, itemIndex: number | null = null): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
     try {
@@ -75,12 +81,15 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
     } catch (e) {
       lastError = e;
       if (__DEV__) console.warn('[send retry]', attempt + 1, describeError(e));
+      if (isPermanent(classifyRemote(e))) break;
       if (attempt < RETRY_DELAYS_MS.length) {
         await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
       }
     }
   }
-  throw lastError;
+  const kind = classifyRemote(lastError);
+  // 파일 한도는 그 장의 문제, 권한은 묶음 전체의 문제
+  throw new SendError(kind, kind === 'too_large' ? itemIndex : null, lastError);
 }
 
 const stillThere = (p: Prepared | null): p is Prepared =>
@@ -99,8 +108,31 @@ async function prepare(item: PickedMedia, onCompress: (ratio: number) => void): 
   return { uri: p.uri, thumbUri: p.thumbUri, width: p.width, height: p.height, durationSec: null };
 }
 
-/** 보내기 실행. 끝까지 실패하면 오류를 던진다. */
+/**
+ * 보내기 실행. 끝까지 실패하면 SendError를 던진다.
+ * 보내는 동안에는 화면이 꺼지지 않게 한다 (긴 영상을 줄이다 화면이 꺼지면 실패하므로).
+ */
 export async function runSendJob(job: SendJob, onProgress: (p: SendProgress) => void): Promise<void> {
+  const keepAwakeTag = `send-${job.postId}`;
+  await activateKeepAwakeAsync(keepAwakeTag).catch(() => {}); // 못 켜도 보내기는 한다
+  try {
+    await runSteps(job, onProgress);
+  } finally {
+    deactivateKeepAwake(keepAwakeTag).catch(() => {});
+  }
+}
+
+/** 실패한 장을 빼고 이어서 보낼 수 있게 한다 (이미 올라간 장은 그대로). 남은 장 수를 돌려준다. */
+export function dropItem(job: SendJob, index: number): number {
+  if (job.uploaded[index]) return job.items.length; // 이미 올라간 장은 빼지 않는다
+  job.items.splice(index, 1);
+  job.mediaIds.splice(index, 1);
+  job.prepared.splice(index, 1);
+  job.uploaded.splice(index, 1);
+  return job.items.length;
+}
+
+async function runSteps(job: SendJob, onProgress: (p: SendProgress) => void): Promise<void> {
   if (!job.postCreated) {
     await withRetry(() => createPost(job.postId, job.userId, job.title, job.tags));
     job.postCreated = true;
@@ -118,7 +150,12 @@ export async function runSendJob(job: SendJob, onProgress: (p: SendProgress) => 
     let prepared = job.prepared[i];
     if (!stillThere(prepared)) {
       if (item.type === 'video') onProgress({ done: doneCount(), compressing: 0 });
-      prepared = await prepare(item, (ratio) => onProgress({ done: doneCount(), compressing: ratio }));
+      try {
+        prepared = await prepare(item, (ratio) => onProgress({ done: doneCount(), compressing: ratio }));
+      } catch (e) {
+        if (__DEV__) console.warn('[send prepare failed]', i, describeError(e));
+        throw new SendError(classifyPrepare(e), i, e);
+      }
       job.prepared[i] = prepared;
       onProgress({ done: doneCount(), compressing: null });
     }
@@ -126,8 +163,8 @@ export async function runSendJob(job: SendJob, onProgress: (p: SendProgress) => 
 
     const path = mediaPath(postId, mediaId, item.type);
     const thumb = thumbPath(postId, mediaId);
-    await withRetry(() => uploadFile(path, ready.uri, item.type === 'video' ? 'video/mp4' : 'image/jpeg'));
-    await withRetry(() => uploadFile(thumb, ready.thumbUri, 'image/jpeg'));
+    await withRetry(() => uploadFile(path, ready.uri, item.type === 'video' ? 'video/mp4' : 'image/jpeg'), i);
+    await withRetry(() => uploadFile(thumb, ready.thumbUri, 'image/jpeg'), i);
     job.uploaded[i] = {
       id: mediaId,
       post_id: postId,
@@ -171,6 +208,9 @@ export function takenAtFromExif(exif: Record<string, unknown> | null | undefined
 
 /** 개발 중 오류 원인 보기용. Error는 JSON.stringify하면 {}가 되므로 이름·메시지를 따로 꺼낸다. */
 export function describeError(e: unknown): string {
+  if (e instanceof SendError) {
+    return `${e.name}(${e.kind}, item=${e.itemIndex}) ← ${describeError(e.cause)}`;
+  }
   if (e instanceof Error) {
     const extra = JSON.stringify(e);
     return `${e.name}: ${e.message}${extra && extra !== '{}' ? ` ${extra}` : ''}`;

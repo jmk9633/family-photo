@@ -22,9 +22,11 @@ import { colors, size } from '@/components/tokens';
 import { ko } from '@/copy/ko';
 import { useSession } from '@/features/auth/session';
 import { listGroupChoices, listRecentTags, type GroupChoice } from '@/features/posts/api';
+import { isPermanent, SendError, type SendErrorKind } from '@/features/posts/sendErrors';
 import {
   MAX_PER_POST,
   describeError,
+  dropItem,
   newSendJob,
   runSendJob,
   takenAtFromExif,
@@ -76,6 +78,7 @@ export default function SendScreen() {
   const [phase, setPhase] = useState<Phase>('compose');
   const [done, setDone] = useState(0);
   const [compressing, setCompressing] = useState<number | null>(null);
+  const [failure, setFailure] = useState<{ kind: SendErrorKind; itemIndex: number | null } | null>(null);
   const [devDetail, setDevDetail] = useState<string | null>(null);
   const job = useRef<SendJob | null>(null);
 
@@ -186,6 +189,7 @@ export default function SendScreen() {
     }
     setPhase('sending');
     setDevDetail(null);
+    setFailure(null);
     try {
       await runSendJob(job.current, (p) => {
         setDone(p.done);
@@ -199,8 +203,21 @@ export default function SendScreen() {
         console.warn('[send failed]', detail);
         setDevDetail(detail);
       }
+      setFailure(
+        e instanceof SendError ? { kind: e.kind, itemIndex: e.itemIndex } : { kind: 'unknown', itemIndex: null },
+      );
       setPhase('failed');
     }
+  }
+
+  /** 다시 해도 안 되는 장을 빼고 이어서 보낸다 (이미 올라간 장은 다시 올리지 않는다). */
+  function dropFailedAndSend() {
+    if (!job.current || failure?.itemIndex == null) return;
+    const removed = job.current.items[failure.itemIndex];
+    const removedKey = photos.find((p) => p.uri === removed?.uri)?.key;
+    dropItem(job.current, failure.itemIndex);
+    if (removedKey) setPhotos((cur) => cur.filter((p) => p.key !== removedKey));
+    send();
   }
 
   function goToInvite() {
@@ -252,18 +269,20 @@ export default function SendScreen() {
             <Text style={styles.muted}>{ko.send.keepOpen}</Text>
           </View>
         ) : phase === 'failed' ? (
-          <View style={styles.status} accessibilityLiveRegion="assertive">
-            <Text style={styles.statusTitle}>{ko.send.failed}</Text>
-            <Text style={[styles.statusText, styles.centerText]}>{ko.send.failedHint}</Text>
-            <Text style={styles.muted}>{ko.send.progress(done, total)}</Text>
-            {devDetail ? <Text style={styles.devDetail}>{devDetail}</Text> : null}
-            <Button label={ko.send.retry} onPress={send} style={styles.wide} />
-            <Button
-              variant="text"
-              label={ko.common.later}
-              onPress={isFirst ? goToInvite : () => router.back()}
-            />
-          </View>
+          <FailedView
+            kind={failure?.kind ?? 'unknown'}
+            item={
+              failure?.itemIndex != null && job.current?.items[failure.itemIndex]
+                ? { index: failure.itemIndex, type: job.current.items[failure.itemIndex].type }
+                : null
+            }
+            remaining={job.current?.items.length ?? 0}
+            progress={ko.send.progress(done, total)}
+            devDetail={devDetail}
+            onRetry={send}
+            onDrop={dropFailedAndSend}
+            onLater={isFirst ? goToInvite : () => router.back()}
+          />
         ) : (
           <View style={styles.status} accessibilityLiveRegion="polite">
             <View style={styles.doneMark}>
@@ -491,6 +510,40 @@ export default function SendScreen() {
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+/** 보내기 실패 화면: 원인별 문구, 다시 해도 안 되는 실패에는 '다시 보내기' 대신 '빼고 보내기' */
+function FailedView(props: {
+  kind: SendErrorKind;
+  item: { index: number; type: 'photo' | 'video' } | null;
+  remaining: number;
+  progress: string;
+  devDetail: string | null;
+  onRetry: () => void;
+  onDrop: () => void;
+  onLater: () => void;
+}) {
+  const { kind, item } = props;
+  const itemName = item ? ko.send.itemName(item.index + 1, item.type) : null;
+  const text = ko.send.errors[kind];
+  const message = typeof text === 'function' ? text(itemName ?? ko.send.itemFallback) : text;
+  const canRetry = !isPermanent(kind);
+  // 뺄 장이 있고, 빼도 남는 장이 있을 때만 '빼고 보내기'
+  const canDrop = !canRetry && item !== null && props.remaining > 1;
+
+  return (
+    <View style={styles.status} accessibilityLiveRegion="assertive">
+      <Text style={styles.statusTitle}>{ko.send.failed}</Text>
+      <Text style={[styles.statusText, styles.centerText]}>{message}</Text>
+      <Text style={styles.muted}>{props.progress}</Text>
+      {props.devDetail ? <Text style={styles.devDetail}>{props.devDetail}</Text> : null}
+      {canRetry ? <Button label={ko.send.retry} onPress={props.onRetry} style={styles.wide} /> : null}
+      {canDrop && itemName ? (
+        <Button label={ko.send.dropAndSend(itemName)} onPress={props.onDrop} style={styles.wide} />
+      ) : null}
+      <Button variant="text" label={ko.common.later} onPress={props.onLater} />
+    </View>
   );
 }
 
