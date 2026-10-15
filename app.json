@@ -7,6 +7,7 @@
     "scheme": "familyphoto",
     "userInterfaceStyle": "light",
     "ios": {
+      "bundleIdentifier": "com.jmk9633.familyphoto",
       "usesAppleSignIn": true
     },
     "android": {

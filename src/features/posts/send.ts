@@ -85,7 +85,7 @@ export async function runSendJob(job: SendJob, onProgress: (done: number) => voi
     if (job.uploaded[i]) continue;
     const photo = job.photos[i];
     const mediaId = job.mediaIds[i];
-    const prepared = await preparePhoto(photo.uri, photo);
+    const prepared = await preparePhoto(photo.uri);
     const path = mediaPath(postId, mediaId);
     const thumb = thumbPath(postId, mediaId);
     await withRetry(() => uploadJpeg(path, prepared.uri));

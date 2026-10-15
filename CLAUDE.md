@@ -84,6 +84,7 @@ supabase/tests      RLS 테스트 (pgTAP)
 | 사진 보존 | 기간 제한 없음 | — |
 | 나간 사람의 사진 삭제 | 본인이 요청하면 즉시 | `posts_delete_self` 정책 |
 | 앱 스킴 | `familyphoto` (가칭, 서비스명 확정 시 변경) | `app.json` + Supabase Redirect URLs |
+| iOS 앱 ID (번들 ID) | `com.jmk9633.familyphoto` (가칭, 서비스명 확정 시 변경) | `app.json` `ios.bundleIdentifier` |
 
 ## 이미지·영상 처리 (앱에서)
 - 사진: 긴 변 2048px 이하 JPEG(품질 0.8), 썸네일 긴 변 480px.
@@ -114,10 +115,10 @@ supabase/tests      RLS 테스트 (pgTAP)
 
 ## 자주 쓰는 명령
 ```
-npx expo start                      # 개발 서버 (아이폰 Expo Go로 QR 스캔)
+npx expo start                      # 개발 서버 (아이폰의 '가족 사진' 개발 빌드 앱에서 연결)
 npx expo install <패키지>            # 패키지 추가
 npx tsc --noEmit                    # 타입 검사
-npx expo run:ios                    # 개발 빌드 (위젯·네이티브 모듈 필요 시)
+npx expo run:ios --device           # 개발 빌드를 아이폰에 설치 (네이티브 라이브러리 추가 시, 무료 계정은 7일마다)
 npx supabase db push                # 마이그레이션을 원격 DB에 적용 (2단계부터)
 npx supabase test db                # RLS 테스트 (Docker 필요. 없으면 Claude가 클라우드에서 검증)
 eas build --profile preview         # 기기 테스트용 빌드
@@ -137,6 +138,11 @@ eas build --profile preview         # 기기 테스트용 빌드
   Android Expo Go에서는 이 방식이 동작하지 않으므로 Android는 개발 빌드부터 테스트한다.
 - Supabase 카카오는 이메일 동의항목을 항상 요청한다. 카카오 앱은 비즈 앱(개인 개발자)으로 전환하고 이메일은 '선택 동의'로 둔다.
 
+- 4단계부터 앱 테스트는 개발 빌드(아이폰에 설치한 '가족 사진' 앱 + `npx expo start`)로 한다. Expo Go에 들어 있는 예전 expo-image-manipulator는
+  아이폰 세로 사진에서 `ERR_IMAGE_CONTEXT_LOST`로 실패하므로, Expo Go에서는 사진 보내기가 동작하지 않는다 (우회 코드는 10/15에 지움).
+- 아이폰 개발 빌드는 무료 애플 계정(Personal Team)으로 서명한다: 7일마다 `npx expo run:ios --device`로 다시 설치. 네이티브 라이브러리를 추가했을 때도 다시 빌드.
+  처음 빌드 때 키체인 창이 여러 번 뜨면 `security set-key-partition-list -S apple-tool:,apple:,codesign: -s ~/Library/Keychains/login.keychain-db`.
+
 - 읽기 정책이 `can_see_post` 같은 security definer 함수인 테이블은 `.insert().select()`(RETURNING)와 `upsert`(on conflict)를 쓰지 않는다.
   같은 문장 안에서는 함수가 방금 넣은 행을 못 봐서 RLS 오류(42501)가 난다. ID는 앱에서 만들어 넣고 결과를 돌려받지 않는다
   (2단계 그룹 만들기, 3단계 묶음 만들기에서 실제로 겪음).
@@ -147,7 +153,7 @@ eas build --profile preview         # 기기 테스트용 빌드
 
 | 무엇 | 왜 | 언제·어떻게 없애나 | 끝났는지 확인 |
 |---|---|---|---|
-| Expo Go에서 사진 줄이기 건너뛰기 (`src/lib/image.ts`의 `IS_EXPO_GO` 분기, 썸네일 = 원본 파일). 부작용: 스크린샷은 16비트 PNG가 `.jpg` 이름·`image/jpeg`로 올라감 (10/15 실제 파일로 확인) | Expo Go 안의 예전 expo-image-manipulator가 아이폰 사진에서 `ERR_IMAGE_CONTEXT_LOST` (57.0.21에서 고쳐짐) | 4단계 시작 때 개발 빌드로 전환 → 같은 사진으로 줄이기 성공 확인 → `IS_EXPO_GO` 분기 삭제, 사진 고르기 `quality`를 한 값으로 정리 | 올라간 파일이 긴 변 2048px 이하, `_thumb`가 480px, 위치 정보 없음 (파일을 내려받아 확인) |
+| 무료 애플 계정 개발 빌드에서 애플 로그인 끔 (`.env`의 `APPLE_SIGN_IN=off` → `app.config.ts`가 기능을 빼고, `features/auth/apple.ts`가 버튼을 숨김) | 무료 계정(Personal Team)은 애플 로그인 기능을 서명하지 못함 (10/15 Xcode 오류로 확인) | 애플 개발자 유료 등록(5단계 전) → `.env`의 줄 삭제 → `app.config.ts`와 `extra.appleSignIn` 확인 코드 삭제 → 다시 빌드 | 개발 빌드 로그인 화면에 애플 버튼이 보이고, 애플 로그인으로 들어가짐 |
 | 3단계 이전 테스트로 생긴 '올리는 중' 묶음과 파일 | 실패한 보내기 시험 | 7단계 24시간 정리 작업이 지운다. 그 전이라도 출시 전 DB 초기화 | posts에 status='uploading'이 24시간 넘게 남지 않음 |
 
 ## 지금 하지 않는 것 (MVP 범위 밖)

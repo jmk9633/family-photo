@@ -21,7 +21,6 @@ import { colors, size } from '@/components/tokens';
 import { ko } from '@/copy/ko';
 import { useSession } from '@/features/auth/session';
 import { listGroupChoices, listRecentTags, type GroupChoice } from '@/features/posts/api';
-import { IS_EXPO_GO } from '@/lib/image';
 import {
   MAX_PER_POST,
   describeError,
@@ -97,10 +96,10 @@ export default function SendScreen() {
         exif: true, // 촬영 시각만 읽는다 (takenAtFromExif). 위치 값은 쓰지 않는다.
         // 'compatible' + quality < 1: 사진 고르기가 원본 복사 대신 일반 JPEG로 다시 저장해서 준다
         // (HEIC로 받으면 화질 값과 상관없이 원본을 그대로 준다 — MediaHandler·ImageUtils.swift).
-        // Expo Go에서는 줄이기를 건너뛰므로(lib/image.ts 임시 우회) 여기서 바로 품질 0.8로 받는다.
+        // 최종 크기·화질(2048px, 0.8)은 lib/image.ts가 정하므로 여기서는 높은 화질로 받는다.
         preferredAssetRepresentationMode:
           ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
-        quality: IS_EXPO_GO ? 0.8 : 0.95,
+        quality: 0.95,
       });
       if (result.canceled) return;
       setPhotos((cur) => {
