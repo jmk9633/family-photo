@@ -1,0 +1,300 @@
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { Button } from '@/components/Button';
+import { TextField } from '@/components/TextField';
+import { colors, size } from '@/components/tokens';
+import { ko } from '@/copy/ko';
+import { useSession } from '@/features/auth/session';
+import {
+  getGroup,
+  listMembers,
+  listOpenInvites,
+  reissueInvite,
+  setMyDisplayName,
+  type Group,
+  type Invite,
+  type Member,
+} from '@/features/groups/api';
+import {
+  cleanName,
+  formatInviteDeadline,
+  isExpired,
+  NAME_MAX,
+  toGroupErrorMessage,
+} from '@/features/groups/format';
+
+// 그룹 화면 (2단계 범위): 구성원과 태그, 내 이름 바꾸기, 관리자의 초대하기·보낸 초대 목록.
+// 연결된 기기·안부 확인·합치기·나가기는 각 단계에서 추가한다.
+export default function GroupScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { session } = useSession();
+  const myId = session?.user.id;
+
+  const [group, setGroup] = useState<Group | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const [editing, setEditing] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [savingName, setSavingName] = useState(false);
+  const [reissuing, setReissuing] = useState<string | null>(null);
+
+  const me = members.find((m) => m.user_id === myId);
+  const isAdmin = !!me?.is_admin;
+
+  const load = useCallback(() => {
+    setFailed(false);
+    Promise.all([getGroup(id), listMembers(id), listOpenInvites(id)])
+      .then(([g, m, inv]) => {
+        setGroup(g);
+        setMembers(m);
+        setInvites(inv);
+        setLoaded(true);
+      })
+      .catch(() => setFailed(true));
+  }, [id]);
+
+  useFocusEffect(load);
+
+  async function saveName() {
+    const clean = cleanName(nameDraft);
+    if (!clean) return;
+    setSavingName(true);
+    setNameError(null);
+    try {
+      await setMyDisplayName(id, clean);
+      setEditing(false);
+      load();
+    } catch (e) {
+      setNameError(toGroupErrorMessage(e));
+    } finally {
+      setSavingName(false);
+    }
+  }
+
+  async function reissue(invite: Invite) {
+    setReissuing(invite.id);
+    setNotice(null);
+    try {
+      await reissueInvite(invite.id);
+      setNotice(ko.group.reissued(invite.display_name));
+    } catch (e) {
+      setNotice(toGroupErrorMessage(e));
+    } finally {
+      setReissuing(null);
+      load();
+    }
+  }
+
+  async function share(invite: Invite) {
+    const deadline = formatInviteDeadline(invite.expires_at);
+    await Share.share({
+      message: ko.invite.shareMessage(group?.name ?? '', invite.code, deadline),
+    });
+  }
+
+  const header = (
+    <Stack.Screen
+      options={{
+        headerTitle: group?.name ?? '',
+        headerRight: () =>
+          isAdmin ? (
+            <Button
+              variant="text"
+              label={ko.group.invite}
+              onPress={() => router.push({ pathname: '/group/[id]/invite', params: { id } })}
+            />
+          ) : null,
+      }}
+    />
+  );
+
+  if (failed) {
+    return (
+      <SafeAreaView style={[styles.container, styles.center]} edges={['bottom']}>
+        {header}
+        <Text style={styles.muted}>{ko.groupErrors.loadFailed}</Text>
+        <Button variant="outline" label={ko.common.retry} onPress={load} />
+      </SafeAreaView>
+    );
+  }
+
+  if (!loaded) {
+    return (
+      <SafeAreaView style={[styles.container, styles.center]} edges={['bottom']}>
+        {header}
+        <ActivityIndicator color={colors.accent} accessibilityLabel={ko.common.loading} />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      {header}
+      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        {isAdmin && members.length === 1 ? (
+          <View style={styles.banner}>
+            <Text style={styles.bannerText}>{ko.group.inviteBanner}</Text>
+            <Button
+              label={ko.group.invite}
+              onPress={() => router.push({ pathname: '/group/[id]/invite', params: { id } })}
+            />
+          </View>
+        ) : null}
+
+        {notice ? (
+          <Text style={styles.notice} accessibilityLiveRegion="polite">
+            {notice}
+          </Text>
+        ) : null}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{ko.group.members(members.length)}</Text>
+          <View style={styles.card}>
+            {members.map((m, i) => (
+              <View key={m.id} style={[styles.row, i > 0 && styles.rowDivider]}>
+                <Text style={styles.memberName}>
+                  {m.display_name || '—'}
+                  {m.user_id === myId ? <Text style={styles.muted}> {ko.group.me}</Text> : null}
+                </Text>
+                <View style={styles.tagRow}>
+                  {m.is_admin ? <Tag label={ko.group.tags.admin} strong /> : null}
+                  {m.easy_mode ? <Tag label={ko.group.tags.easy} /> : null}
+                  {m.wellbeing_check ? <Tag label={ko.group.tags.wellbeing} /> : null}
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {editing ? (
+          <View style={styles.section}>
+            <TextField
+              label={ko.group.myNameTitle}
+              value={nameDraft}
+              onChangeText={(t) => {
+                setNameDraft(t);
+                if (nameError) setNameError(null);
+              }}
+              maxLength={NAME_MAX}
+              error={nameError}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={saveName}
+            />
+            <View style={styles.inlineButtons}>
+              <Button
+                variant="outline"
+                label={ko.common.cancel}
+                onPress={() => setEditing(false)}
+                style={styles.flex}
+              />
+              <Button
+                label={ko.common.save}
+                onPress={saveName}
+                loading={savingName}
+                disabled={cleanName(nameDraft).length === 0}
+                style={styles.flex}
+              />
+            </View>
+          </View>
+        ) : me ? (
+          <Button
+            variant="outline"
+            label={ko.group.myName}
+            onPress={() => {
+              setNameDraft(me.display_name);
+              setEditing(true);
+            }}
+          />
+        ) : null}
+
+        {isAdmin && invites.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{ko.group.invites}</Text>
+            <Text style={styles.muted}>{ko.group.invitesHint}</Text>
+            <View style={styles.card}>
+              {invites.map((inv, i) => {
+                const expired = isExpired(inv.expires_at);
+                return (
+                  <View key={inv.id} style={[styles.row, i > 0 && styles.rowDivider]}>
+                    <Text style={styles.memberName}>{inv.display_name}</Text>
+                    <Text style={styles.muted}>
+                      {expired
+                        ? ko.group.expired
+                        : `${inv.code} · ${formatInviteDeadline(inv.expires_at)}`}
+                    </Text>
+                    <View style={styles.inlineButtons}>
+                      {!expired ? (
+                        <Button
+                          variant="outline"
+                          label={ko.group.shareAgain}
+                          onPress={() => share(inv)}
+                          style={styles.flex}
+                        />
+                      ) : null}
+                      <Button
+                        variant="outline"
+                        label={ko.group.reissue}
+                        loading={reissuing === inv.id}
+                        onPress={() => reissue(inv)}
+                        style={styles.flex}
+                      />
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function Tag({ label, strong }: { label: string; strong?: boolean }) {
+  return (
+    <View style={[styles.tag, strong && styles.tagStrong]}>
+      <Text style={[styles.tagText, strong && styles.tagTextStrong]}>{label}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  container: { flex: 1, backgroundColor: colors.background, paddingHorizontal: size.gutter },
+  center: { justifyContent: 'center', alignItems: 'center', gap: 16 },
+  body: { gap: 24, paddingTop: 8, paddingBottom: 32 },
+  muted: { fontSize: size.small, lineHeight: 21, color: colors.textSecondary, fontWeight: '400' },
+  notice: {
+    fontSize: size.small,
+    lineHeight: 21,
+    color: colors.text,
+    backgroundColor: colors.surface,
+    borderRadius: size.radius,
+    padding: 14,
+  },
+
+  banner: { gap: 12, padding: 16, borderRadius: 16, backgroundColor: colors.surface },
+  bannerText: { fontSize: size.body, fontWeight: '600', color: colors.text },
+
+  section: { gap: 10 },
+  sectionTitle: { fontSize: size.small, fontWeight: '700', color: colors.textSecondary },
+  card: { borderWidth: 1, borderColor: colors.border, borderRadius: size.radius },
+  row: { paddingVertical: 14, paddingHorizontal: 16, gap: 8 },
+  rowDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  memberName: { fontSize: size.body, fontWeight: '700', color: colors.text },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  tag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: colors.surface },
+  tagStrong: { backgroundColor: colors.text },
+  tagText: { fontSize: 13, color: colors.text },
+  tagTextStrong: { color: '#FFFFFF' },
+  inlineButtons: { flexDirection: 'row', gap: 10 },
+});
