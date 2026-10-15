@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
+import { VideoSlide } from '@/components/VideoSlide';
 import { ko } from '@/copy/ko';
 import { useMyGroups } from '@/features/groups/useMyGroups';
 import { getPost, listNameBook, senderName, type FeedMedia, type FeedPost } from '@/features/posts/feed';
@@ -25,6 +26,7 @@ import { signedSource, signPaths } from '@/lib/signedUrl';
 // 사진 상세 (일반 모드, 결정 D2): 타임라인에서 누른 사진부터 어두운 전체 화면으로 크게 보고,
 // 좌우로 밀거나 아래 '이전·다음' 버튼으로 묶음 안을 넘긴다. 아래에 제목·태그·보낸 사람·날짜.
 // 원본은 여기서만 불러오고, 받는 동안 썸네일을 먼저 보여준다 (CLAUDE.md 이미지 처리).
+// 영상은 시스템 재생 버튼으로 재생하고, 다른 장으로 넘기면 멈춘다 (VideoSlide).
 // 하트(5단계)는 이 화면 아래 버튼 줄에 붙는다.
 //
 // params: id = 묶음, index = 처음 보여줄 장(0부터), group = 보고 있던 그룹(보낸 사람 이름 기준)
@@ -139,16 +141,22 @@ function PostDetail() {
             getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
             onMomentumScrollEnd={onScrollEnd}
             renderItem={({ item, index: i }) => (
-              <View style={{ width }} accessible accessibilityLabel={ko.detail.photoLabel(i + 1, total)}>
-                <Image
-                  source={signedSource(item.path)}
-                  placeholder={signedSource(item.thumbPath)}
-                  placeholderContentFit="contain"
-                  contentFit="contain"
-                  transition={150}
-                  style={styles.photo}
-                />
-              </View>
+              item.type === 'video' ? (
+                <View style={{ width }} accessibilityLabel={ko.detail.videoLabel(i + 1, total)}>
+                  <VideoSlide path={item.path} active={i === at} />
+                </View>
+              ) : (
+                <View style={{ width }} accessible accessibilityLabel={ko.detail.photoLabel(i + 1, total)}>
+                  <Image
+                    source={signedSource(item.path)}
+                    placeholder={signedSource(item.thumbPath)}
+                    placeholderContentFit="contain"
+                    contentFit="contain"
+                    transition={150}
+                    style={styles.photo}
+                  />
+                </View>
+              )
             )}
           />
 

@@ -80,7 +80,9 @@ export const ko = {
     next: '다음',
     position: (i: number, n: number) => `${i} / ${n}`,
     photoLabel: (i: number, n: number) => `사진 ${n}장 중 ${i}번째`,
+    videoLabel: (i: number, n: number) => `${n}장 중 ${i}번째, 영상`,
     loadFailed: '사진을 불러오지 못했어요',
+    videoFailed: '영상을 불러오지 못했어요',
     gone: '볼 수 없는 사진이에요.\n보낸 사람이 지웠거나 그룹에서 나갔을 수 있어요.',
   },
   // 앨범 탭 (F-HEETWR)
@@ -160,15 +162,21 @@ export const ko = {
     shareAgain: '보내기',
     send: '이 그룹에 사진 보내기',
   },
-  // 묶음으로 보내기 (F-AXZNWA). 3단계는 사진만, 영상은 4단계.
+  // 묶음으로 보내기 (F-AXZNWA)
   send: {
     title: '보내기',
     firstTitle: '첫 사진을 보내 볼까요?',
     firstDescription: '가족이 처음 들어왔을 때\n사진이 먼저 기다리고 있으면 좋아요.',
     skip: '건너뛰기',
-    pick: '사진 고르기',
+    pick: '사진·영상 고르기',
     pickMore: '더 고르기',
+    picking: '불러오는 중',
     remove: (n: number) => `${n}번째 사진 빼기`,
+    removeVideo: (n: number) => `${n}번째 영상 빼기`,
+    videoHint: '영상은 1분까지 보낼 수 있어요',
+    videoTooLong: (n: number) => `1분이 넘는 영상 ${n}개는 빠졌어요`,
+    compressing: '영상을 줄이는 중이에요',
+    compressingProgress: (percent: number) => `${percent}%`,
     count: (n: number) => `${n}장 골랐어요`,
     limit: '한 번에 30장까지 보낼 수 있어요',
     tagsLabel: '태그',
@@ -195,7 +203,7 @@ export const ko = {
     doneTo: (groups: string) => `${groups}에 보냈어요`,
     ok: '확인',
     next: '다음: 가족 초대하기',
-    pickFailed: '사진을 불러오지 못했어요. 다시 골라 주세요',
+    pickFailed: '사진·영상을 불러오지 못했어요. 다시 골라 주세요',
   },
   groupErrors: {
     invalidName: '이름은 1~20자로 입력해 주세요',

@@ -1,5 +1,8 @@
+import { File } from 'expo-file-system';
+
 import { uuidv4 } from '@/lib/id';
 import { preparePhoto } from '@/lib/image';
+import { prepareVideo } from '@/lib/video';
 
 import {
   attachGroups,
@@ -9,27 +12,32 @@ import {
   mediaPath,
   thumbPath,
   touchActive,
-  uploadJpeg,
+  uploadFile,
   type MediaRow,
 } from './api';
 
 // 묶음 보내기 순서와 자동 재시도.
 // 실패하면 SendJob을 그대로 들고 있다가 '다시 보내기'로 이어서 보낸다
-// (이미 만든 묶음·이미 올라간 사진은 다시 만들거나 올리지 않는다).
+// (이미 만든 묶음·이미 올라간 파일은 다시 만들거나 올리지 않는다. 이미 줄인 영상도 다시 줄이지 않는다).
 
 export const MAX_PER_POST = 30; // DB 트리거 too_many_media와 같은 값
 export const TITLE_MAX = 60; // posts.title check와 같은 값
 
-export type PickedPhoto = {
+export type PickedMedia = {
+  type: 'photo' | 'video';
   uri: string;
   width: number;
   height: number;
   takenAt: string | null;
+  durationSec: number | null; // 영상만
 };
+
+/** 줄여서 올릴 준비가 된 파일 (다시 보낼 때 재사용) */
+type Prepared = { uri: string; thumbUri: string; width: number; height: number; durationSec: number | null };
 
 export type SendJob = {
   userId: string;
-  photos: PickedPhoto[];
+  items: PickedMedia[];
   title: string | null;
   tags: string[];
   groupIds: string[];
@@ -37,18 +45,23 @@ export type SendJob = {
   postId: string;
   postCreated: boolean;
   mediaIds: string[];
+  prepared: (Prepared | null)[];
   uploaded: (MediaRow | null)[];
 };
 
+/** done = 올라간 장 수, compressing = 지금 줄이고 있는 영상의 진행(0~1), 없으면 null */
+export type SendProgress = { done: number; compressing: number | null };
+
 export function newSendJob(
-  input: Omit<SendJob, 'postId' | 'postCreated' | 'mediaIds' | 'uploaded'>,
+  input: Omit<SendJob, 'postId' | 'postCreated' | 'mediaIds' | 'prepared' | 'uploaded'>,
 ): SendJob {
   return {
     ...input,
     postId: uuidv4(),
     postCreated: false,
-    mediaIds: input.photos.map(() => uuidv4()),
-    uploaded: input.photos.map(() => null),
+    mediaIds: input.items.map(() => uuidv4()),
+    prepared: input.items.map(() => null),
+    uploaded: input.items.map(() => null),
   };
 }
 
@@ -70,8 +83,24 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   throw lastError;
 }
 
-/** 보내기 실행. onProgress(올라간 장 수). 끝까지 실패하면 오류를 던진다. */
-export async function runSendJob(job: SendJob, onProgress: (done: number) => void): Promise<void> {
+const stillThere = (p: Prepared | null): p is Prepared =>
+  !!p && new File(p.uri).exists && new File(p.thumbUri).exists;
+
+/**
+ * 사진은 줄이고, 영상은 압축·위치 검사·대표 프레임을 만든다.
+ * 줄이기는 다시 시도해도 같은 결과라 재시도하지 않는다 (파일 문제는 다시 해도 안 된다).
+ */
+async function prepare(item: PickedMedia, onCompress: (ratio: number) => void): Promise<Prepared> {
+  if (item.type === 'video') {
+    const v = await prepareVideo(item.uri, onCompress);
+    return { uri: v.uri, thumbUri: v.thumbUri, width: v.width, height: v.height, durationSec: v.durationSec };
+  }
+  const p = await preparePhoto(item.uri);
+  return { uri: p.uri, thumbUri: p.thumbUri, width: p.width, height: p.height, durationSec: null };
+}
+
+/** 보내기 실행. 끝까지 실패하면 오류를 던진다. */
+export async function runSendJob(job: SendJob, onProgress: (p: SendProgress) => void): Promise<void> {
   if (!job.postCreated) {
     await withRetry(() => createPost(job.postId, job.userId, job.title, job.tags));
     job.postCreated = true;
@@ -79,29 +108,39 @@ export async function runSendJob(job: SendJob, onProgress: (done: number) => voi
   const postId = job.postId;
 
   const doneCount = () => job.uploaded.filter(Boolean).length;
-  onProgress(doneCount());
+  onProgress({ done: doneCount(), compressing: null });
 
-  for (let i = 0; i < job.photos.length; i++) {
+  for (let i = 0; i < job.items.length; i++) {
     if (job.uploaded[i]) continue;
-    const photo = job.photos[i];
+    const item = job.items[i];
     const mediaId = job.mediaIds[i];
-    const prepared = await preparePhoto(photo.uri);
-    const path = mediaPath(postId, mediaId);
+
+    let prepared = job.prepared[i];
+    if (!stillThere(prepared)) {
+      if (item.type === 'video') onProgress({ done: doneCount(), compressing: 0 });
+      prepared = await prepare(item, (ratio) => onProgress({ done: doneCount(), compressing: ratio }));
+      job.prepared[i] = prepared;
+      onProgress({ done: doneCount(), compressing: null });
+    }
+    const ready = prepared;
+
+    const path = mediaPath(postId, mediaId, item.type);
     const thumb = thumbPath(postId, mediaId);
-    await withRetry(() => uploadJpeg(path, prepared.uri));
-    await withRetry(() => uploadJpeg(thumb, prepared.thumbUri));
+    await withRetry(() => uploadFile(path, ready.uri, item.type === 'video' ? 'video/mp4' : 'image/jpeg'));
+    await withRetry(() => uploadFile(thumb, ready.thumbUri, 'image/jpeg'));
     job.uploaded[i] = {
       id: mediaId,
       post_id: postId,
-      type: 'photo',
+      type: item.type,
       path,
       thumb_path: thumb,
-      width: prepared.width,
-      height: prepared.height,
-      taken_at: photo.takenAt,
+      width: ready.width,
+      height: ready.height,
+      duration_sec: ready.durationSec,
+      taken_at: item.takenAt,
       sort_order: i,
     };
-    onProgress(doneCount());
+    onProgress({ done: doneCount(), compressing: null });
   }
 
   const rows = job.uploaded.filter((r): r is MediaRow => r !== null);

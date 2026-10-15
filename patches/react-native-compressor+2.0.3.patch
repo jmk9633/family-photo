@@ -1,0 +1,43 @@
+diff --git a/node_modules/react-native-compressor/android/src/main/java/com/reactnativecompressor/Video/VideoCompressor/compressor/Compressor.kt b/node_modules/react-native-compressor/android/src/main/java/com/reactnativecompressor/Video/VideoCompressor/compressor/Compressor.kt
+index 01ddc5a..2cb1476 100644
+--- a/node_modules/react-native-compressor/android/src/main/java/com/reactnativecompressor/Video/VideoCompressor/compressor/Compressor.kt
++++ b/node_modules/react-native-compressor/android/src/main/java/com/reactnativecompressor/Video/VideoCompressor/compressor/Compressor.kt
+@@ -170,7 +170,7 @@ object Compressor {
+       listener,
+       duration,
+       rotation,
+-      locationData,
++      null, // [family-photo patch] never forward the source GPS location into the output
+     )
+   }
+ 
+diff --git a/node_modules/react-native-compressor/ios/Video/VideoMain.swift b/node_modules/react-native-compressor/ios/Video/VideoMain.swift
+index 4c6dd1a..ed7f7d0 100644
+--- a/node_modules/react-native-compressor/ios/Video/VideoMain.swift
++++ b/node_modules/react-native-compressor/ios/Video/VideoMain.swift
+@@ -349,13 +349,22 @@ class VideoCompressor {
+             ]
+         }
+ 
+-        // Preserve source metadata (location, creation date, etc.) by forwarding
+-        // every available metadata format to the writer.
++        // [family-photo patch] Forward only the creation date. Location (GPS) and every
++        // other source metadata item are dropped so they never leave the device.
++        // Upstream preserves all metadata with no option to turn it off.
++        let keptIdentifiers: Set<AVMetadataIdentifier> = [
++            .commonIdentifierCreationDate,
++            .quickTimeMetadataCreationDate,
++            .quickTimeUserDataCreationDate,
++        ]
+         var preservedMetadata: [AVMetadataItem] = asset.metadata
+         for format in asset.availableMetadataFormats {
+             preservedMetadata.append(contentsOf: asset.metadata(forFormat: format))
+         }
+-        exporter.metadata = preservedMetadata
++        exporter.metadata = preservedMetadata.filter { item in
++            guard let identifier = item.identifier else { return false }
++            return keptIdentifiers.contains(identifier)
++        }
+ 
+         compressorExports[uuid] = exporter
+         exporter.export(progressHandler: { (progress) in

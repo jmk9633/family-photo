@@ -13,16 +13,18 @@ export type GroupChoice = { id: string; name: string; others: string[] };
 export type MediaRow = {
   id: string;
   post_id: string;
-  type: 'photo';
+  type: 'photo' | 'video';
   path: string;
   thumb_path: string;
   width: number;
   height: number;
+  duration_sec: number | null;
   taken_at: string | null;
   sort_order: number;
 };
 
-export const mediaPath = (postId: string, mediaId: string) => `posts/${postId}/${mediaId}.jpg`;
+export const mediaPath = (postId: string, mediaId: string, type: 'photo' | 'video' = 'photo') =>
+  `posts/${postId}/${mediaId}.${type === 'video' ? 'mp4' : 'jpg'}`;
 export const thumbPath = (postId: string, mediaId: string) => `posts/${postId}/${mediaId}_thumb.jpg`;
 
 /** 보낼 그룹 고르기: 내 그룹 + 나를 뺀 구성원 이름 (그룹 아래 작은 글씨) */
@@ -103,11 +105,15 @@ export async function createPost(
 }
 
 /** 2. 파일 올리기. 다시 보낼 때 이미 올라간 파일이면 성공으로 본다. */
-export async function uploadJpeg(path: string, localUri: string): Promise<void> {
+export async function uploadFile(
+  path: string,
+  localUri: string,
+  contentType: 'image/jpeg' | 'video/mp4',
+): Promise<void> {
   const body = await new File(localUri).arrayBuffer();
   const { error } = await supabase.storage
     .from(BUCKET)
-    .upload(path, body, { contentType: 'image/jpeg', upsert: false });
+    .upload(path, body, { contentType, upsert: false });
   if (error && !isAlreadyExists(error)) throw error;
 }
 

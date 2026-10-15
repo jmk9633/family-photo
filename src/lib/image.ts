@@ -48,3 +48,17 @@ export async function preparePhoto(uri: string): Promise<PreparedPhoto> {
     for (const ref of new Set(refs)) ref.release();
   }
 }
+
+/** 영상 대표 프레임처럼 이미 받은 이미지를 썸네일(긴 변 480px JPEG)로 만든다. */
+export async function prepareThumb(uri: string): Promise<{ uri: string; width: number; height: number }> {
+  const original = await ImageManipulator.manipulate(uri).renderAsync();
+  const refs: ImageRef[] = [original];
+  try {
+    const thumb = await fit(original, THUMB_MAX);
+    refs.push(thumb);
+    const saved = await thumb.saveAsync({ format: SaveFormat.JPEG, compress: JPEG_QUALITY });
+    return { uri: saved.uri, width: original.width, height: original.height };
+  } finally {
+    for (const ref of new Set(refs)) ref.release();
+  }
+}
