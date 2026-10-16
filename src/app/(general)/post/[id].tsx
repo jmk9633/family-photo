@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   FlatList,
   Pressable,
@@ -18,16 +19,28 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { VideoSlide } from '@/components/VideoSlide';
 import { ko } from '@/copy/ko';
+import { useSession } from '@/features/auth/session';
 import { useMyGroups } from '@/features/groups/useMyGroups';
-import { getPost, listNameBook, senderName, type FeedMedia, type FeedPost } from '@/features/posts/feed';
+import {
+  getPost,
+  listNameBook,
+  senderName,
+  type FeedMedia,
+  type FeedPost,
+  type NameBook,
+} from '@/features/posts/feed';
 import { formatDay } from '@/features/posts/format';
+import { addHeart, listHearts, removeHeart, type HeartBook } from '@/features/posts/reactions';
+import { recordView } from '@/features/posts/views';
 import { signedSource, signPaths } from '@/lib/signedUrl';
 
 // 사진 상세 (일반 모드, 결정 D2): 타임라인에서 누른 사진부터 어두운 전체 화면으로 크게 보고,
 // 좌우로 밀거나 아래 '이전·다음' 버튼으로 묶음 안을 넘긴다. 아래에 제목·태그·보낸 사람·날짜.
 // 원본은 여기서만 불러오고, 받는 동안 썸네일을 먼저 보여준다 (CLAUDE.md 이미지 처리).
 // 영상은 시스템 재생 버튼으로 재생하고, 다른 장으로 넘기면 멈춘다 (VideoSlide).
-// 하트(5단계)는 이 화면 아래 버튼 줄에 붙는다.
+// 하트(5단계, F-CPRPRW): 제목 아래 줄. 다시 누르면 취소, 누르면 'OO에게 보냈어요'를 잠깐 보여준다.
+// 그 장에 하트를 누른 다른 사람 이름을 숫자 없이 보여준다 (같은 그룹 구성원 누구나 본다).
+// 이 화면을 열면 '봤어요'를 기록한다 (F-BLIYTI, 내가 보낸 묶음은 빼고).
 //
 // params: id = 묶음, index = 처음 보여줄 장(0부터), group = 보고 있던 그룹(보낸 사람 이름 기준)
 
@@ -46,8 +59,13 @@ function PostDetail() {
   const { id, index, group } = useLocalSearchParams<{ id: string; index?: string; group?: string }>();
   const { width } = useWindowDimensions();
   const { groups } = useMyGroups();
+  const { session } = useSession();
+  const me = session?.user.id ?? '';
   const [post, setPost] = useState<FeedPost | null | undefined>(undefined);
-  const [sender, setSender] = useState<string | null>(null);
+  const [book, setBook] = useState<NameBook>(new Map());
+  const [hearts, setHearts] = useState<HeartBook>(new Map());
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [failed, setFailed] = useState(false);
   const [current, setCurrent] = useState(() => Math.max(0, Number(index ?? 0) || 0));
   const listRef = useRef<FlatList<FeedMedia>>(null);
@@ -68,16 +86,76 @@ function PostDetail() {
     load();
   }, [load]);
 
-  // 보낸 사람 이름 (그룹마다 다를 수 있어 내 그룹 순서가 필요)
+  // 이름표 (보낸 사람·하트 누른 사람. 그룹마다 이름이 다를 수 있다)
   useEffect(() => {
-    if (!post || !groups) return;
+    if (!post) return;
     listNameBook(post.groupIds)
-      .then((book) => setSender(senderName(book, post.senderId, post.groupIds, groups.map((g) => g.id), group ?? null)))
-      .catch(() => setSender(null));
-  }, [post, groups, group]);
+      .then(setBook)
+      .catch(() => setBook(new Map()));
+  }, [post]);
+
+  // '봤어요' 기록과 하트 목록
+  useEffect(() => {
+    if (!post || !me) return;
+    if (post.senderId !== me) recordView(post.id, me);
+    listHearts(post.media.map((m) => m.id))
+      .then(setHearts)
+      .catch((e) => {
+        if (__DEV__) console.warn('[hearts load failed]', e);
+      });
+  }, [post, me]);
+
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+  }, []);
+
+  const myGroupOrder = groups?.map((g) => g.id) ?? [];
+  const nameOf = (userId: string) =>
+    post ? senderName(book, userId, post.groupIds, myGroupOrder, group ?? null) : null;
+  const sender = post ? nameOf(post.senderId) : null;
 
   const total = post?.media.length ?? 0;
   const at = Math.min(current, Math.max(total - 1, 0));
+  const currentMedia = post?.media[at];
+  const heartUsers = (currentMedia && hearts.get(currentMedia.id)) || [];
+  const hearted = heartUsers.includes(me);
+  const heartNames = heartUsers
+    .filter((u) => u !== me)
+    .map(nameOf)
+    .filter((n): n is string => !!n);
+
+  function showToast(message: string) {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(message);
+    AccessibilityInfo.announceForAccessibility(message);
+    toastTimer.current = setTimeout(() => setToast(null), 2000);
+  }
+
+  function setHeartLocal(mediaId: string, on: boolean) {
+    setHearts((prev) => {
+      const nextBook = new Map(prev);
+      const users = (prev.get(mediaId) ?? []).filter((u) => u !== me);
+      nextBook.set(mediaId, on ? [...users, me] : users);
+      return nextBook;
+    });
+  }
+
+  // 먼저 화면에 반영하고, 실패하면 되돌린다. 연달아 눌러도 DB에는 하나만 남는다 (기본 키).
+  async function toggleHeart() {
+    if (!post || !currentMedia || !me) return;
+    const mediaId = currentMedia.id;
+    const on = !hearted;
+    setHeartLocal(mediaId, on);
+    if (on) showToast(post.senderId === me ? ko.detail.heartSentSelf : ko.detail.heartSent(sender ?? ko.feed.unknownSender));
+    try {
+      if (on) await addHeart(mediaId, me);
+      else await removeHeart(mediaId, me);
+    } catch (e) {
+      if (__DEV__) console.warn('[heart failed]', e);
+      setHeartLocal(mediaId, !on);
+      showToast(ko.detail.heartFailed);
+    }
+  }
 
   function go(to: number) {
     if (to < 0 || to >= total) return;
@@ -170,6 +248,23 @@ function PostDetail() {
                 {[sender ?? ko.feed.unknownSender, formatDay(post.createdAt)].join(' · ')}
               </Text>
             </View>
+            <View style={styles.heartRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={ko.detail.heart}
+                accessibilityState={{ selected: hearted }}
+                onPress={toggleHeart}
+                style={({ pressed }) => [styles.heartButton, hearted && styles.heartButtonOn, pressed && styles.pressed]}
+              >
+                <Ionicons name={hearted ? 'heart' : 'heart-outline'} size={26} color={hearted ? HEART : '#FFFFFF'} />
+                <Text style={styles.darkButtonLabel}>{ko.detail.heart}</Text>
+              </Pressable>
+              {heartNames.length > 0 ? (
+                <Text style={styles.heartNames} numberOfLines={2}>
+                  {ko.detail.heartNames(heartNames)}
+                </Text>
+              ) : null}
+            </View>
             {total > 1 ? (
               <View style={styles.nav}>
                 <DarkButton label={ko.detail.prev} icon="chevron-back" disabled={at === 0} onPress={() => go(at - 1)} />
@@ -185,6 +280,11 @@ function PostDetail() {
           </View>
         </>
       )}
+      {toast ? (
+        <View pointerEvents="none" style={styles.toast}>
+          <Text style={styles.toastText}>{toast}</Text>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -213,6 +313,8 @@ function DarkButton(props: {
   );
 }
 
+const HEART = '#FF5A6E';
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000000' },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8 },
@@ -228,6 +330,29 @@ const styles = StyleSheet.create({
   tags: { color: '#E8E8E8', fontSize: 15 },
   meta: { color: '#C8C8C8', fontSize: 15 },
   nav: { flexDirection: 'row', gap: 10 },
+  heartRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  heartButton: {
+    minHeight: 52,
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 18,
+  },
+  heartButtonOn: { borderColor: HEART },
+  heartNames: { flex: 1, color: '#E8E8E8', fontSize: 15, lineHeight: 21 },
+  toast: {
+    position: 'absolute',
+    alignSelf: 'center',
+    bottom: '42%',
+    backgroundColor: 'rgba(40,40,40,0.92)',
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  toastText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
   darkButton: {
     flex: 1,
     minHeight: 52,

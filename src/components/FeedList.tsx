@@ -1,8 +1,17 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useRef, useState, type ReactElement } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+  type ViewToken,
+} from 'react-native';
 
 import { ko } from '@/copy/ko';
+import { useSession } from '@/features/auth/session';
 import type { Group } from '@/features/groups/api';
 import {
   albumMonths,
@@ -15,6 +24,7 @@ import {
   type NameBook,
 } from '@/features/posts/feed';
 import { formatMonth, monthKey } from '@/features/posts/format';
+import { listViewers, recordView } from '@/features/posts/views';
 import { signPaths } from '@/lib/signedUrl';
 
 import { Button } from './Button';
@@ -25,6 +35,8 @@ import { colors, size } from './tokens';
 // 묶음 목록 (사진 탭 타임라인과 앨범 카드의 묶음 목록이 함께 쓴다).
 // 월 제목 아래에 묶음을 최신순으로 (F-FRFNRL). 20개씩 이어서 불러온다.
 // 화면에 돌아올 때마다 첫 페이지를 다시 읽는다 (보내기에서 돌아왔을 때 새 묶음이 바로 보이게).
+// '봤어요' (F-BLIYTI, 10/16 결정): 남이 보낸 묶음 카드가 절반 이상 1초 보이면 본 것으로 기록하고,
+// 내가 보낸 묶음에는 본 사람 얼굴을 붙인다 (DB가 내 묶음의 기록만 돌려준다).
 
 type Props = {
   groups: Group[]; // 내 그룹 전체 (먼저 들어간 순) — 이름·받은 그룹 표시용
@@ -51,11 +63,28 @@ function isOlderCursor(a: FeedCursor, b: FeedCursor): boolean {
   return a.id < b.id;
 }
 
+/** 카드가 절반 이상, 1초 동안 보이면 '봤어요' */
+const VIEWABILITY = { itemVisiblePercentThreshold: 50, minimumViewTime: 1000 };
+
+/** 내가 보낸 묶음들의 본 사람 (실패하면 빈 결과 — 목록은 그대로 보여준다) */
+async function viewersOf(posts: FeedPost[], me: string): Promise<Map<string, string[]>> {
+  const mine = posts.filter((p) => p.senderId === me).map((p) => p.id);
+  try {
+    return await listViewers(mine);
+  } catch (e) {
+    if (__DEV__) console.warn('[viewers load failed]', e);
+    return new Map();
+  }
+}
+
 /** 한 묶음에서 목록에 보이는 썸네일 경로 */
 const visibleThumbs = (p: FeedPost) => p.media.slice(0, GRID_MAX).map((m) => m.thumbPath);
 
 export function FeedList({ groups, groupIds, viewingGroupId, filter, monthHeaders, header, renderEmpty }: Props) {
+  const { session } = useSession();
+  const me = session?.user.id ?? '';
   const [posts, setPosts] = useState<FeedPost[] | null>(null);
+  const [viewers, setViewers] = useState<Map<string, string[]>>(new Map());
   const [next, setNext] = useState<FeedCursor | null>(null);
   const [names, setNames] = useState<NameBook>(new Map());
   const [monthCounts, setMonthCounts] = useState<Map<string, number>>(new Map());
@@ -85,8 +114,9 @@ export function FeedList({ groups, groupIds, viewingGroupId, filter, monthHeader
           listNameBook(allGroupIds.split(',').filter(Boolean)),
           monthHeaders ? albumMonths(fullFilter.groupIds) : Promise.resolve([]),
         ]);
-        await signPaths(page.posts.flatMap(visibleThumbs));
+        const [, seen] = await Promise.all([signPaths(page.posts.flatMap(visibleThumbs)), viewersOf(page.posts, me)]);
         if (id !== requestId.current) return;
+        setViewers((prev) => (mode === 'silent' ? new Map([...prev, ...seen]) : seen));
         if (mode === 'silent') {
           // 화면에 돌아왔을 때(사진 상세를 닫았을 때 등): 새 첫 페이지로 바꾸되, 더 아래까지 불러 둔
           // 묶음은 그대로 둔다. 그래야 보던 자리가 사라지지 않는다.
@@ -113,7 +143,7 @@ export function FeedList({ groups, groupIds, viewingGroupId, filter, monthHeader
         if (id === requestId.current) setRefreshing(false);
       }
     },
-    [key, allGroupIds, monthHeaders],
+    [key, allGroupIds, monthHeaders, me],
   );
 
   const loadedKey = useRef<string | null>(null);
@@ -132,8 +162,9 @@ export function FeedList({ groups, groupIds, viewingGroupId, filter, monthHeader
     setMoreFailed(false);
     try {
       const page = await listFeed(JSON.parse(key) as FeedFilter, next);
-      await signPaths(page.posts.flatMap(visibleThumbs));
+      const [, seen] = await Promise.all([signPaths(page.posts.flatMap(visibleThumbs)), viewersOf(page.posts, me)]);
       if (id !== requestId.current) return;
+      setViewers((prev) => new Map([...prev, ...seen]));
       setPosts((prev) => [...(prev ?? []), ...page.posts.filter((p) => !prev?.some((q) => q.id === p.id))]);
       setNext(page.next);
     } catch (e) {
@@ -142,7 +173,21 @@ export function FeedList({ groups, groupIds, viewingGroupId, filter, monthHeader
     } finally {
       setLoadingMore(false);
     }
-  }, [next, loadingMore, posts, key]);
+  }, [next, loadingMore, posts, key, me]);
+
+  // FlatList는 onViewableItemsChanged가 바뀌는 것을 허용하지 않으므로 처음 만든 함수를 계속 쓰고,
+  // 지금 로그인한 사람은 ref로 읽는다.
+  const meRef = useRef(me);
+  useEffect(() => {
+    meRef.current = me;
+  }, [me]);
+  const onViewableItemsChanged = useRef(({ changed }: { changed: ViewToken<Row>[] }) => {
+    const uid = meRef.current;
+    if (!uid) return;
+    for (const t of changed) {
+      if (t.isViewable && t.item.kind === 'post' && t.item.post.senderId !== uid) recordView(t.item.post.id, uid);
+    }
+  }).current;
 
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];
@@ -189,6 +234,8 @@ export function FeedList({ groups, groupIds, viewingGroupId, filter, monthHeader
         <RefreshControl refreshing={refreshing} onRefresh={() => loadFirst('refresh')} tintColor={colors.accent} />
       }
       onEndReached={loadMore}
+      viewabilityConfig={VIEWABILITY}
+      onViewableItemsChanged={onViewableItemsChanged}
       onEndReachedThreshold={0.6}
       ListFooterComponent={
         loadingMore ? (
@@ -211,6 +258,13 @@ export function FeedList({ groups, groupIds, viewingGroupId, filter, monthHeader
           );
         }
         const p = item.post;
+        const seenBy =
+          p.senderId === me
+            ? (viewers.get(p.id) ?? [])
+                .filter((u) => u !== me)
+                .map((u) => senderName(names, u, p.groupIds, groupOrder, viewingGroupId))
+                .filter((n): n is string => !!n)
+            : null;
         return (
           <PostCard
             post={p}
@@ -220,6 +274,7 @@ export function FeedList({ groups, groupIds, viewingGroupId, filter, monthHeader
                 ? null
                 : groupOrder.filter((g) => p.groupIds.includes(g)).map((g) => groupName.get(g) ?? '')
             }
+            seenBy={seenBy}
             onOpen={(index) =>
               router.push({
                 pathname: '/post/[id]',

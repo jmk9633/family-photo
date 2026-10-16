@@ -1,4 +1,12 @@
 // 앱의 모든 문구는 이 파일에 모은다.
+
+/** 이름 뒤 '이/가': 마지막 글자에 받침이 있으면 '이' (지은이, 엄마가). 한글이 아니면 '가'. */
+function iga(name: string): string {
+  const c = name.trim().charCodeAt(name.trim().length - 1);
+  const hasFinal = c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0;
+  return `${name}${hasFinal ? '이' : '가'}`;
+}
+
 export const ko = {
   common: {
     loading: '불러오는 중이에요',
@@ -56,6 +64,9 @@ export const ko = {
   me: {
     title: '내 정보',
     signOut: '로그아웃',
+    showSeen: '내가 본 사진을 가족에게 알리기',
+    showSeenHint: "끄면 사진을 보낸 가족에게 '봤어요'가 보이지 않아요. 안부 확인용 기록은 그대로 남아요.",
+    showSeenFailed: '설정을 바꾸지 못했어요. 다시 시도해 주세요.',
   },
   // 사진 탭 월별 타임라인 (F-FRFNRL)
   feed: {
@@ -72,6 +83,9 @@ export const ko = {
     emptyText: '첫 사진을 보내 볼까요?\n가족이 들어오면 바로 볼 수 있어요.',
     emptySend: '첫 사진 보내기',
     loadMoreFailed: '더 불러오지 못했어요',
+    // '봤어요' (F-BLIYTI): 내가 보낸 묶음에만, 숫자 없이 얼굴과 이름으로
+    seen: '봤어요',
+    seenLabel: (names: string[]) => `${iga(names.join(', '))} 봤어요`,
   },
   // 사진 상세 (크게 보기)
   detail: {
@@ -84,6 +98,12 @@ export const ko = {
     loadFailed: '사진을 불러오지 못했어요',
     videoFailed: '영상을 불러오지 못했어요',
     gone: '볼 수 없는 사진이에요.\n보낸 사람이 지웠거나 그룹에서 나갔을 수 있어요.',
+    // 하트 (F-CPRPRW): 숫자 없이 누른 사람 이름만
+    heart: '좋아요',
+    heartSent: (name: string) => `${name}에게 보냈어요`,
+    heartSentSelf: '좋아요를 눌렀어요',
+    heartFailed: '하트를 보내지 못했어요',
+    heartNames: (names: string[]) => `${iga(names.join(', '))} 좋아해요`,
   },
   // 앨범 탭 (F-HEETWR)
   album: {
