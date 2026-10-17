@@ -67,6 +67,17 @@ export const ko = {
     showSeen: '내가 본 사진을 가족에게 알리기',
     showSeenHint: "끄면 사진을 보낸 가족에게 '봤어요'가 보이지 않아요. 안부 확인용 기록은 그대로 남아요.",
     showSeenFailed: '설정을 바꾸지 못했어요. 다시 시도해 주세요.',
+    pushLabel: '알림',
+    pushOn: '알림을 받고 있어요',
+    pushOff: '가족이 사진을 보내도 알림이 오지 않아요',
+    pushTurnOn: '알림 받기',
+    pushOpenSettings: '설정에서 알림 켜기',
+  },
+  // 알림 권한 안내 (첫 그룹 직후)
+  notify: {
+    title: '가족이 사진을 보내면\n알려드릴까요?',
+    text: '새 사진이 오거나, 내 사진에 하트를 받거나,\n가족이 내 사진을 봤을 때 알려드려요.\n내 정보에서 언제든 끌 수 있어요.',
+    allow: '알림 받기',
   },
   // 사진 탭 월별 타임라인 (F-FRFNRL)
   feed: {

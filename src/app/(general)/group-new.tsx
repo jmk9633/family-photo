@@ -9,6 +9,7 @@ import { colors, size } from '@/components/tokens';
 import { ko } from '@/copy/ko';
 import { useSession } from '@/features/auth/session';
 import { createGroup, getMyDefaultName } from '@/features/groups/api';
+import { promptPushIfNeeded } from '@/features/push/push';
 import { cleanName, GROUP_NAME_MAX, NAME_MAX, toGroupErrorMessage } from '@/features/groups/format';
 
 // 그룹 이름 + 이 그룹에서 보일 내 이름(카카오·구글 이름을 미리 채워 고칠 수 있게).
@@ -36,6 +37,7 @@ export default function GroupNewScreen() {
     try {
       const groupId = await createGroup(cleanName(name), cleanName(myName));
       router.replace({ pathname: '/send', params: { group: groupId, first: '1' } });
+      promptPushIfNeeded(); // 첫 그룹이면 알림 안내를 그 위에 띄운다
     } catch (e) {
       setError(toGroupErrorMessage(e));
     } finally {

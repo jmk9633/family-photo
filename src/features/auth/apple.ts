@@ -1,4 +1,3 @@
-import Constants from 'expo-constants';
 import * as AppleAuthentication from 'expo-apple-authentication';
 
 import { supabase } from '@/lib/supabase';
@@ -30,11 +29,7 @@ export async function signInWithApple() {
   if (error) throw error;
 }
 
-/**
- * 애플 로그인 버튼을 보여 줄지.
- * 무료 애플 계정으로 만든 개발 빌드는 애플 로그인 기능 없이 빌드되므로(app.config.ts 임시 우회) 버튼을 숨긴다.
- */
+/** 애플 로그인 버튼을 보여 줄지 (iOS 13 이상 기기에서만 true) */
 export async function isAppleSignInAvailable() {
-  if (Constants.expoConfig?.extra?.appleSignIn === false) return false;
   return AppleAuthentication.isAvailableAsync();
 }

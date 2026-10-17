@@ -11,7 +11,10 @@
       "usesAppleSignIn": true
     },
     "android": {
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static"
@@ -31,11 +34,19 @@
         {
           "photosPermission": "가족에게 보낼 사진을 고르려면 사진 보관함 접근을 허용해 주세요."
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4507bd27-7128-425d-a528-0b08f9d31dfa"
+      }
+    },
+    "owner": "jmk9633"
   }
 }

@@ -147,15 +147,19 @@ eas build --profile preview         # 기기 테스트용 빌드
 9. TV 앱 (삼성 Tizen부터)
 
 ## 알려진 제약
-- 애플 로그인은 Expo Go에서 동작하지 않는다 (isAvailableAsync가 false). 애플 개발자 유료 등록 후 개발 빌드에서 확인한다.
-  그때 Supabase Apple Client IDs에 실제 번들 ID를 넣는다.
+- 애플 로그인은 Expo Go에서 동작하지 않는다 (isAvailableAsync가 false). 개발 빌드로 확인한다.
+  애플 개발자 유료 등록 완료(10/16, 개인 "moon ki Joung Developer Team"). 무료 계정용 우회(app.config.ts, APPLE_SIGN_IN=off)는 10/16에 지웠다.
+  Supabase Auth → Apple의 Client IDs에 번들 ID `com.jmk9633.familyphoto`를 넣어야 로그인된다.
+- 푸시: 앱은 `features/push/push.ts`로 권한·토큰(devices 표)만 다루고, 보내기는 Edge Function이 Expo 푸시 서비스로 한다.
+  Expo 프로젝트 ID는 `app.json`의 `extra.eas.projectId` (`npx eas-cli@latest init`). 애플 푸시 키는 Expo 계정에 등록한다.
+  권한은 첫 그룹을 만들거나 들어간 직후 안내 화면(`/notify`)에서 묻는다. 거절하면 내 정보 탭에서 아이폰 설정으로 보낸다.
 - 카카오·구글 로그인 복귀 주소는 `familyphoto://auth/callback` 고정 (Supabase가 IP 주소 복귀를 거부하므로 Expo Go 기본 주소를 쓰지 않는다).
   Android Expo Go에서는 이 방식이 동작하지 않으므로 Android는 개발 빌드부터 테스트한다.
 - Supabase 카카오는 이메일 동의항목을 항상 요청한다. 카카오 앱은 비즈 앱(개인 개발자)으로 전환하고 이메일은 '선택 동의'로 둔다.
 
 - 4단계부터 앱 테스트는 개발 빌드(아이폰에 설치한 '가족 사진' 앱 + `npx expo start`)로 한다. Expo Go에 들어 있는 예전 expo-image-manipulator는
   아이폰 세로 사진에서 `ERR_IMAGE_CONTEXT_LOST`로 실패하므로, Expo Go에서는 사진 보내기가 동작하지 않는다 (우회 코드는 10/15에 지움).
-- 아이폰 개발 빌드는 무료 애플 계정(Personal Team)으로 서명한다: 7일마다 `npx expo run:ios --device`로 다시 설치. 네이티브 라이브러리를 추가했을 때도 다시 빌드.
+- 아이폰 개발 빌드는 유료 팀("moon ki Joung Developer Team")으로 서명한다 (10/16부터, 7일 만료 없음). 네이티브 라이브러리를 추가했을 때 `npx expo run:ios --device`로 다시 빌드.
   처음 빌드 때 키체인 창이 여러 번 뜨면 `security set-key-partition-list -S apple-tool:,apple:,codesign: -s ~/Library/Keychains/login.keychain-db`.
 
 - 읽기 정책이 `can_see_post` 같은 security definer 함수인 테이블은 `.insert().select()`(RETURNING)와 `upsert`(on conflict)를 쓰지 않는다.
@@ -177,7 +181,6 @@ eas build --profile preview         # 기기 테스트용 빌드
 
 | 무엇 | 왜 | 언제·어떻게 없애나 | 끝났는지 확인 |
 |---|---|---|---|
-| 무료 애플 계정 개발 빌드에서 애플 로그인 끔 (`.env`의 `APPLE_SIGN_IN=off` → `app.config.ts`가 기능을 빼고, `features/auth/apple.ts`가 버튼을 숨김) | 무료 계정(Personal Team)은 애플 로그인 기능을 서명하지 못함 (10/15 Xcode 오류로 확인) | 애플 개발자 유료 등록(5단계 전) → `.env`의 줄 삭제 → `app.config.ts`와 `extra.appleSignIn` 확인 코드 삭제 → 다시 빌드 | 개발 빌드 로그인 화면에 애플 버튼이 보이고, 애플 로그인으로 들어가짐 |
 | 3단계 이전 테스트로 생긴 '올리는 중' 묶음과 파일 | 실패한 보내기 시험 | 7단계 24시간 정리 작업이 지운다. 그 전이라도 출시 전 DB 초기화 | posts에 status='uploading'이 24시간 넘게 남지 않음 |
 
 ## 지금 하지 않는 것 (MVP 범위 밖)

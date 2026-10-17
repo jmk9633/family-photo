@@ -8,6 +8,7 @@ import { colors, size } from '@/components/tokens';
 import { ko } from '@/copy/ko';
 import { redeemInvite } from '@/features/groups/api';
 import { toGroupErrorMessage } from '@/features/groups/format';
+import { promptPushIfNeeded } from '@/features/push/push';
 
 const CODE_LENGTH = 6;
 
@@ -27,6 +28,7 @@ export default function JoinScreen() {
       const result = await redeemInvite(value);
       if (result.status === 'ok' && result.groupId) {
         router.replace({ pathname: '/group/[id]', params: { id: result.groupId } });
+        promptPushIfNeeded(); // 첫 그룹이면 알림 안내를 그 위에 띄운다
         return;
       }
       setError(result.status === 'ok' ? ko.groupErrors.unknown : ko.join.status[result.status]);
