@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button';
 import { colors, size } from '@/components/tokens';
 import { ko } from '@/copy/ko';
+import { useMode } from '@/features/auth/mode';
 import { redeemInvite } from '@/features/groups/api';
 import { toGroupErrorMessage } from '@/features/groups/format';
 import { promptPushIfNeeded } from '@/features/push/push';
@@ -15,6 +16,7 @@ const CODE_LENGTH = 6;
 // 초대 코드로 그룹에 들어가기. 이름·할 일은 초대할 때 정한 대로 적용된다 (이름은 나중에 바꿀 수 있다).
 // 이미 그 그룹 구성원이면 서버가 초대를 쓰지 않고 바로 ok를 돌려준다.
 export default function JoinScreen() {
+  const { refreshMode } = useMode();
   const [code, setCode] = useState('');
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +31,8 @@ export default function JoinScreen() {
       if (result.status === 'ok' && result.groupId) {
         router.replace({ pathname: '/group/[id]', params: { id: result.groupId } });
         promptPushIfNeeded(); // 첫 그룹이면 알림 안내를 그 위에 띄운다
+        // 쉬운 화면 태그가 붙은 초대였다면 쉬운 화면으로 바뀐다 (6단계)
+        refreshMode();
         return;
       }
       setError(result.status === 'ok' ? ko.groupErrors.unknown : ko.join.status[result.status]);

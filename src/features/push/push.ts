@@ -120,10 +120,17 @@ export async function unregisterPush(userId: string): Promise<void> {
   currentToken = null;
 }
 
-/** 알림을 누르면: 서버가 넣어 둔 postId가 있으면 그 묶음을 크게 연다. */
-export function openFromNotification(response: Notifications.NotificationResponse | null | undefined) {
+/**
+ * 알림을 누르면: 서버가 넣어 둔 postId가 있으면 그 묶음을 크게 연다.
+ * 일반 모드는 사진 상세, 쉬운 화면은 한 장씩 보기 (6단계).
+ */
+export function openFromNotification(
+  response: Notifications.NotificationResponse | null | undefined,
+  mode: 'general' | 'easy',
+) {
   const postId = response?.notification.request.content.data?.postId;
   if (typeof postId === 'string' && postId) {
-    router.push({ pathname: '/post/[id]', params: { id: postId } });
+    if (mode === 'easy') router.push({ pathname: '/play/[id]', params: { id: postId } });
+    else router.push({ pathname: '/post/[id]', params: { id: postId } });
   }
 }

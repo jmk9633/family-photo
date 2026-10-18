@@ -25,7 +25,7 @@ export default function GeneralLayout() {
     const id = response?.notification.request.identifier;
     if (!response || !id || handled.current === id) return;
     handled.current = id;
-    openFromNotification(response);
+    openFromNotification(response, 'general');
   }, [response]);
 
   return (

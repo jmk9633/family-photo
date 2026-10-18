@@ -3,26 +3,31 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
-import { SessionProvider, useSession } from '@/features/auth/session';
+import { ModeProvider, useMode } from '@/features/auth/mode';
+import { SessionProvider } from '@/features/auth/session';
 
 SplashScreen.preventAutoHideAsync();
 
+// 첫 화면 고르기 (6단계): 로그인 전·숫자로 연결 중 → (auth), 쉬운 화면 → (easy), 그 밖 → (general)
 function RootNavigator() {
-  const { session, isLoading } = useSession();
+  const { mode } = useMode();
 
-  // 저장된 로그인 정보를 다 읽은 뒤에 첫 화면을 보여준다 (로그인 화면이 잠깐 깜빡이지 않게).
+  // 로그인 정보와 화면 모드를 다 읽은 뒤에 첫 화면을 보여준다 (다른 화면이 잠깐 깜빡이지 않게).
   useEffect(() => {
-    if (!isLoading) SplashScreen.hideAsync();
-  }, [isLoading]);
+    if (mode !== 'loading') SplashScreen.hideAsync();
+  }, [mode]);
 
-  if (isLoading) return null;
+  if (mode === 'loading') return null;
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={!!session}>
+      <Stack.Protected guard={mode === 'general'}>
         <Stack.Screen name="(general)" />
       </Stack.Protected>
-      <Stack.Protected guard={!session}>
+      <Stack.Protected guard={mode === 'easy'}>
+        <Stack.Screen name="(easy)" />
+      </Stack.Protected>
+      <Stack.Protected guard={mode === 'signedOut' || mode === 'connecting'}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
     </Stack>
@@ -32,8 +37,10 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <SessionProvider>
-      <StatusBar style="dark" />
-      <RootNavigator />
+      <ModeProvider>
+        <StatusBar style="dark" />
+        <RootNavigator />
+      </ModeProvider>
     </SessionProvider>
   );
 }

@@ -27,7 +27,7 @@ Expo 일반 규칙은 `AGENTS.md`도 함께 따른다 (Expo API는 기억으로 
 src/app/            Expo Router 화면
   (auth)/           로그인 전 화면 (로그인, 이메일, 코드 입력)
   (general)/        일반 모드 화면
-  (easy)/           쉬운 모드 화면 (예정)
+  (easy)/           쉬운 모드 화면 (home·play/[id]·past·more)
 src/components/     공통 컴포넌트 (src/components/easy/ = 쉬운 모드 전용)
 src/copy/ko.ts      모든 화면 문구
 src/lib/            supabase 클라이언트, 이미지 압축, 업로드, 날짜 유틸
@@ -142,7 +142,7 @@ eas build --profile preview         # 기기 테스트용 빌드
 3. 보내기 — 사진 (완료)
 4. 보기 + 영상 보내기 (완료)
 5. 반응(하트)·'봤어요' + 애플 로그인 우회 제거 + 푸시 알림 (완료)
-6. 쉬운 모드 연결 ← 다음
+6. 쉬운 모드 연결 ← 지금 (6-1 연결·보기 / 6-2 영상 한마디·사진 찍어 보내기 / 6-3 밤 알림 모으기)
 7. 안부 확인 (MVP)
 8. 홈 화면 위젯 (iOS부터)
 9. TV 앱 (삼성 Tizen부터)
@@ -170,6 +170,18 @@ eas build --profile preview         # 기기 테스트용 빌드
 - 읽기 정책이 `can_see_post` 같은 security definer 함수인 테이블은 `.insert().select()`(RETURNING)와 `upsert`(on conflict)를 쓰지 않는다.
   같은 문장 안에서는 함수가 방금 넣은 행을 못 봐서 RLS 오류(42501)가 난다. ID는 앱에서 만들어 넣고 결과를 돌려받지 않는다
   (2단계 그룹 만들기, 3단계 묶음 만들기에서 실제로 겪음).
+
+- 쉬운 모드 연결 (6단계, 10/18 결정):
+  - 앱 첫 화면 `(auth)/start` = '가족이 알려준 숫자가 있어요' + '내 계정으로 시작하기' 두 버튼. QR 연결은 9단계(TV)와 함께.
+  - 숫자 6자리를 다 누르고 '연결하기'를 누를 때 Supabase 익명 로그인을 처음 한 번 만들고 `redeem_invite`를 부른다.
+    틀려도 같은 익명 계정을 계속 쓴다(10분 5번 제한 유지). 연결 못 한 익명 계정은 7단계 정리 작업이 지운다.
+  - 어느 화면 모음을 열지는 `features/auth/mode.tsx`가 정한다: 로그인 전·연결 중 → (auth), `profiles.easy_mode` → (easy), 그 밖 → (general).
+    인터넷이 안 되면 이 폰에 저장한 마지막 값으로 연다. 앱을 열 때·다시 올 때 `last_active_at`을 갱신한다(10분에 한 번).
+  - 익명 사용자: 그룹·초대를 만들 수 없고(`anonymous_not_allowed`), 합류하면 늘 쉬운 화면, 쉬운 화면을 끌 수 없다(`anonymous_easy_only`) — 0005.
+  - Supabase 대시보드 Authentication에서 익명 로그인(Allow anonymous sign-ins)을 켜야 한다.
+  - '새 사진' = 내가 아직 한 장도 안 본 남의 묶음. 홈 배지는 그 묶음 장 수. 홈의 자동 넘김은 시청이 아니다. 한 장씩 보기는 첫 장이 보일 때 '봤어요'.
+  - 쉬운 화면 사진 찍어 보내기의 받는 그룹은 MVP에서 항상 속한 모든 그룹(저장 칸 없음). 영상 한마디 제목은 저장하지 않고 화면에서 'OO의 영상 한마디'.
+  - 쉬운 화면은 화면의 큰 버튼만 쓰고 밀어서 넘기기는 넣지 않는다.
 
 ## 라이브러리 수정본 (patch-package)
 `patches/`의 수정본은 `npm install` 때 `postinstall`로 자동 적용된다. 라이브러리 버전을 올리면 수정본도 다시 만들고 아래 확인을 다시 한다.

@@ -35,6 +35,11 @@ export function formatDay(iso: string): string {
   return p.y === now.y ? ko.date.day(p.m, p.d) : ko.date.dayWithYear(p.y, p.m, p.d);
 }
 
+/** 그 달의 며칠인지 (한국 시간) */
+export function dayOfMonth(iso: string): number {
+  return kstParts(iso).d;
+}
+
 /** 영상 길이 '0:14', '1:00' */
 export function formatDuration(sec: number | null): string {
   const s = Math.max(0, Math.round(sec ?? 0));
