@@ -1,4 +1,5 @@
-import { useFocusEffect } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,7 +15,7 @@ import { getPushStatus, requestPush, unregisterPush, type PushStatus } from '@/f
 import { supabase } from '@/lib/supabase';
 
 // 쉬운 화면 더보기 (와이어프레임 '쉬운 모드 · 더보기', 10/18 결정 12 — 6단계에서는 일부만).
-//   알림 · 내가 본 사진을 가족에게 알리기 · 일반 화면으로 바꾸기(계정이 있는 사람만)
+//   알림 · 내가 본 사진을 가족에게 알리기 · 다른 가족과도 연결하기 · 일반 화면으로 바꾸기(계정이 있는 사람만)
 // 안부 확인은 7단계, TV 연결은 9단계, 보낼 가족 정하기·관리자 메뉴는 MVP 이후에 더한다.
 
 export default function EasyMore() {
@@ -138,6 +139,20 @@ export default function EasyMore() {
           </View>
         ) : null}
 
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={ko.easy.more.connectMore}
+          accessibilityHint={ko.easy.more.connectMoreHint}
+          onPress={() => router.push('/connect')}
+          style={({ pressed }) => [styles.card, styles.linkCard, pressed && styles.pressed]}
+        >
+          <View style={styles.cardText}>
+            <Text style={styles.cardTitle}>{ko.easy.more.connectMore}</Text>
+            <Text style={styles.cardHint}>{ko.easy.more.connectMoreHint}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={26} color={easyColors.text} />
+        </Pressable>
+
         {!isAnonymous ? (
           <View style={styles.bottom}>
             <BigButton variant="gray" label={ko.easy.more.toGeneral} loading={switching} onPress={toGeneral} />
@@ -175,6 +190,7 @@ const styles = StyleSheet.create({
   cardText: { flex: 1, gap: 4 },
   cardTitle: { fontSize: 21, fontWeight: '700', color: easyColors.text },
   cardHint: { fontSize: easySize.body, lineHeight: 26, color: easyColors.textSecondary },
+  linkCard: { flexDirection: 'row', alignItems: 'center' },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   pill: { minHeight: 52, minWidth: 84, paddingHorizontal: 18, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   pillOn: { backgroundColor: easyColors.accent },

@@ -32,6 +32,10 @@ export default function EasyHome() {
   const me = session?.user.id ?? '';
   const { welcome, setWelcome } = useMode();
   const [step, setStep] = useState<'welcome' | 'notify' | 'home'>(welcome !== null ? 'welcome' : 'home');
+  // 더보기에서 다른 가족과도 연결하고 돌아오면 '연결됐어요'를 다시 보여준다
+  useEffect(() => {
+    if (welcome !== null) setStep('welcome');
+  }, [welcome]);
 
   const [feed, setFeed] = useState<EasyFeed | null>(null);
   const [months, setMonths] = useState<MonthCount[]>([]);

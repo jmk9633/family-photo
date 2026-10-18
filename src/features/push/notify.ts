@@ -7,8 +7,17 @@ import { supabase } from '@/lib/supabase';
 export type NotifyKind = 'new_post' | 'heart' | 'seen';
 
 export function requestNotify(type: NotifyKind, postId: string): void {
+  invoke(type, { type, postId });
+}
+
+/** 초대 코드로 그룹에 들어간 뒤: 그 그룹 구성원에게 '가족이 들어왔어요' (방금 들어왔는지는 서버가 확인) */
+export function requestJoinNotify(groupId: string): void {
+  invoke('joined', { type: 'joined', groupId });
+}
+
+function invoke(type: string, body: Record<string, string>): void {
   supabase.functions
-    .invoke('notify', { body: { type, postId } })
+    .invoke('notify', { body })
     .then(({ data, error }) => {
       if (__DEV__) {
         if (error) console.warn('[notify failed]', type, error);

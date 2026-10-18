@@ -128,9 +128,14 @@ export function openFromNotification(
   response: Notifications.NotificationResponse | null | undefined,
   mode: 'general' | 'easy',
 ) {
-  const postId = response?.notification.request.content.data?.postId;
+  const data = response?.notification.request.content.data;
+  const postId = data?.postId;
+  const groupId = data?.groupId;
   if (typeof postId === 'string' && postId) {
     if (mode === 'easy') router.push({ pathname: '/play/[id]', params: { id: postId } });
     else router.push({ pathname: '/post/[id]', params: { id: postId } });
+  } else if (typeof groupId === 'string' && groupId && mode === 'general') {
+    // '가족이 들어왔어요' → 그 그룹 화면 (쉬운 화면은 홈에 그대로)
+    router.push({ pathname: '/group/[id]', params: { id: groupId } });
   }
 }

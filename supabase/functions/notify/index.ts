@@ -7,6 +7,8 @@
 //   new_post: 내가 보낸 묶음이 완료(ready)됐다 → 받은 그룹의 다른 활성 구성원에게
 //   heart   : 내가 그 묶음의 사진에 하트를 눌렀다 → 보낸 사람에게 (사람·묶음당 첫 하트만)
 //   seen    : 내가 그 묶음을 오늘 봤다 → 보낸 사람에게 (사람·묶음·날짜당 한 번, 시청 표시를 끈 사람은 안 보냄)
+//   joined  : 내가 초대 코드로 그 그룹에 방금(10분 안) 들어왔다 → 그 그룹의 다른 활성 구성원 모두에게
+//             ({ type, groupId }, 같은 합류는 한 번 — join_notification_log 0006, 6단계 10/18 결정)
 //
 // 이름은 받는 사람이 보는 그룹에서의 이름 (그 묶음을 받은 그룹 중 받는 사람이 먼저 들어간 그룹).
 // 쉬운 모드 사용자의 밤(21~8시) 알림 모으기는 6단계에서 쉬운 모드를 붙일 때 더한다.
@@ -17,6 +19,7 @@ import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.1
 
 type Kind = 'new_post' | 'heart' | 'seen';
 const KINDS: Kind[] = ['new_post', 'heart', 'seen'];
+const JOIN_FRESH_MS = 10 * 60 * 1000;
 const NOT_DAILY = '1970-01-01';
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
@@ -25,6 +28,7 @@ const copy = {
   newPost: { title: '새 사진이 왔어요', body: (name: string, what: string) => `${iga(name)} ${what} 보냈어요` },
   heart: { title: '하트를 받았어요', body: (name: string) => `${iga(name)} 보낸 사진을 좋아해요` },
   seen: { title: '가족이 사진을 봤어요', body: (name: string) => `${iga(name)} 보낸 사진을 봤어요` },
+  joined: { title: '가족이 들어왔어요', body: (name: string, group: string) => `${iga(name)} ${group}에 들어왔어요` },
   family: '가족',
 };
 
@@ -80,12 +84,13 @@ Deno.serve(async (req) => {
   if (userError || !userData.user) return json(401, { error: 'auth' });
   const me = userData.user.id;
 
-  let input: { type?: string; postId?: string };
+  let input: { type?: string; postId?: string; groupId?: string };
   try {
     input = await req.json();
   } catch {
     return json(400, { error: 'body' });
   }
+  if (input.type === 'joined') return await handleJoined(admin, me, input.groupId ?? '');
   const kind = input.type as Kind;
   const postId = input.postId ?? '';
   if (!KINDS.includes(kind) || !/^[0-9a-f-]{36}$/i.test(postId)) return json(400, { error: 'input' });
@@ -201,6 +206,16 @@ async function deliver(
     return { title: copy.seen.title, body: copy.seen.body(name) };
   };
 
+  return await pushTo(admin, recipients, text, { postId: post.id, kind });
+}
+
+/** 받는 사람들의 활성 기기로 보낸다. 보낸 수를 돌려준다. */
+async function pushTo(
+  admin: SupabaseClient,
+  recipients: string[],
+  text: (recipient: string) => { title: string; body: string },
+  data: Record<string, string>,
+): Promise<number> {
   // 기기: 활성 + 토큰 있음. 같은 토큰이 여러 계정에 남아 있으면 가장 최근에 쓴 계정에게만 보낸다
   const { data: deviceRows } = await admin
     .from('devices')
@@ -218,7 +233,7 @@ async function deliver(
     to: d.push_token,
     sound: 'default',
     ...text(d.user_id),
-    data: { postId: post.id, kind },
+    data,
   }));
 
   let sent = 0;
@@ -242,6 +257,54 @@ async function deliver(
     }
   }
   return sent;
+}
+
+/** 합류 알림: 방금 그 그룹에 들어온 사람만 부를 수 있고, 같은 합류는 한 번만 보낸다 */
+async function handleJoined(admin: SupabaseClient, me: string, groupId: string): Promise<Response> {
+  if (!/^[0-9a-f-]{36}$/i.test(groupId)) return json(400, { error: 'input' });
+  const { data: member } = await admin
+    .from('members')
+    .select('id, display_name, joined_at, status')
+    .eq('group_id', groupId)
+    .eq('user_id', me)
+    .maybeSingle();
+  if (!member || member.status !== 'active') return json(200, { sent: 0, reason: 'not_member' });
+  // 이미 있던 구성원이 같은 코드를 또 넣으면(서버가 바로 ok) 알리지 않는다
+  if (Date.now() - new Date(member.joined_at).getTime() > JOIN_FRESH_MS) {
+    return json(200, { sent: 0, reason: 'not_fresh' });
+  }
+  const { data: group } = await admin.from('groups').select('name, status').eq('id', groupId).maybeSingle();
+  if (!group || group.status !== 'active') return json(200, { sent: 0, reason: 'group' });
+  const { data: others } = await admin
+    .from('members')
+    .select('user_id')
+    .eq('group_id', groupId)
+    .eq('status', 'active')
+    .neq('user_id', me);
+  const recipients = (others ?? []).map((m: { user_id: string }) => m.user_id);
+  if (recipients.length === 0) return json(200, { sent: 0, reason: 'no_recipient' });
+
+  const { error: logError } = await admin
+    .from('join_notification_log')
+    .insert({ member_id: member.id, joined_at: member.joined_at });
+  if (logError) {
+    if (logError.code === '23505') return json(200, { sent: 0, reason: 'already' });
+    throw logError;
+  }
+  const name = member.display_name || copy.family;
+  try {
+    const sent = await pushTo(
+      admin,
+      recipients,
+      () => ({ title: copy.joined.title, body: copy.joined.body(name, group.name) }),
+      { groupId, kind: 'joined' },
+    );
+    return json(200, { sent });
+  } catch (e) {
+    await admin.from('join_notification_log').delete().match({ member_id: member.id, joined_at: member.joined_at });
+    console.error('[notify] joined deliver failed', e);
+    return json(502, { error: 'deliver' });
+  }
 }
 
 /** 토큰 → 그 토큰을 가장 최근에 쓴 계정 */

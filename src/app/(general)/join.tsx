@@ -9,6 +9,7 @@ import { ko } from '@/copy/ko';
 import { useMode } from '@/features/auth/mode';
 import { redeemInvite } from '@/features/groups/api';
 import { toGroupErrorMessage } from '@/features/groups/format';
+import { requestJoinNotify } from '@/features/push/notify';
 import { promptPushIfNeeded } from '@/features/push/push';
 
 const CODE_LENGTH = 6;
@@ -29,6 +30,7 @@ export default function JoinScreen() {
     try {
       const result = await redeemInvite(value);
       if (result.status === 'ok' && result.groupId) {
+        requestJoinNotify(result.groupId); // 그룹 구성원에게 '가족이 들어왔어요' (6단계)
         router.replace({ pathname: '/group/[id]', params: { id: result.groupId } });
         promptPushIfNeeded(); // 첫 그룹이면 알림 안내를 그 위에 띄운다
         // 쉬운 화면 태그가 붙은 초대였다면 쉬운 화면으로 바뀐다 (6단계)

@@ -157,6 +157,7 @@ eas build --profile preview         # 기기 테스트용 빌드
   알림 출발은 앱이 기록을 마친 뒤 `requestNotify(type, postId)` → Edge Function `notify` (10/17 결정 A).
   함수가 부른 사람이 정말 그 일을 했는지 DB로 다시 확인하고, `notification_log`(0004)에 먼저 넣어 같은 알림은 한 번만 보낸다.
   new_post=받은 그룹 구성원에게, heart=그 사람의 그 묶음 첫 하트만, seen=그날 처음 볼 때만(시청 표시를 끈 사람 제외).
+  joined=초대 코드로 방금(10분 안) 들어온 사람 → 그 그룹 다른 구성원 모두에게 '가족이 들어왔어요'(`requestJoinNotify(groupId)`, 한 번만은 `join_notification_log` 0006).
   배포: `npx supabase functions deploy notify`. 함수는 앱 tsc에서 빼 두었다(tsconfig exclude, Deno로 검사).
 - 카카오·구글 로그인 복귀 주소는 `familyphoto://auth/callback` 고정 (Supabase가 IP 주소 복귀를 거부하므로 Expo Go 기본 주소를 쓰지 않는다).
   Android Expo Go에서는 이 방식이 동작하지 않으므로 Android는 개발 빌드부터 테스트한다.
@@ -182,6 +183,8 @@ eas build --profile preview         # 기기 테스트용 빌드
   - '새 사진' = 내가 아직 한 장도 안 본 남의 묶음. 홈 배지는 그 묶음 장 수. 홈의 자동 넘김은 시청이 아니다. 한 장씩 보기는 첫 장이 보일 때 '봤어요'.
   - 쉬운 화면 사진 찍어 보내기의 받는 그룹은 MVP에서 항상 속한 모든 그룹(저장 칸 없음). 영상 한마디 제목은 저장하지 않고 화면에서 'OO의 영상 한마디'.
   - 쉬운 화면은 화면의 큰 버튼만 쓰고 밀어서 넘기기는 넣지 않는다.
+  - 숫자를 또 받으면 쉬운 화면 더보기 '다른 가족과도 연결하기'(`(easy)/connect`, 숫자판은 `components/easy/CodeEntry`)로 지금 계정 그대로 그 그룹에도 들어간다.
+    여러 가족 사진은 쉬운 화면에서 고르지 않고 날짜순으로 합쳐 보여준다 (가족별로 보려면 계정 + 일반 화면).
 
 ## 라이브러리 수정본 (patch-package)
 `patches/`의 수정본은 `npm install` 때 `postinstall`로 자동 적용된다. 라이브러리 버전을 올리면 수정본도 다시 만들고 아래 확인을 다시 한다.
