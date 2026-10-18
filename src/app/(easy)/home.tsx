@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/components/easy/BigButton';
@@ -36,6 +36,7 @@ export default function EasyHome() {
   const [feed, setFeed] = useState<EasyFeed | null>(null);
   const [months, setMonths] = useState<MonthCount[]>([]);
   const [failed, setFailed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     if (!me) return;
@@ -65,6 +66,13 @@ export default function EasyHome() {
       load();
     }, [load]),
   );
+
+  // 아래로 당기면 새로 읽는다 (화면에 돌아올 때도 새로 읽으므로 이것만이 유일한 방법은 아니다)
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, [load]);
 
   if (step === 'welcome') {
     return (
@@ -111,7 +119,10 @@ export default function EasyHome() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView
+        contentContainerStyle={styles.body}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={easyColors.text} />}
+      >
         {failed && !feed ? (
           <View style={styles.message}>
             <Text style={styles.messageText}>{ko.easy.home.offline}</Text>

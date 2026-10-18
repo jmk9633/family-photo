@@ -82,20 +82,32 @@ export default function EasyMore() {
 
         {push ? (
           <View style={styles.card}>
-            <View style={styles.cardText}>
-              <Text style={styles.cardTitle}>{ko.easy.more.push}</Text>
-              <Text style={styles.cardHint}>{push === 'granted' ? ko.easy.more.pushOn : ko.easy.more.pushOff}</Text>
-            </View>
-            {push === 'undetermined' ? (
-              <BigButton
-                label={ko.easy.more.pushTurnOn}
+            <View style={styles.toggleRow}>
+              <View style={styles.cardText}>
+                <Text style={styles.cardTitle}>{ko.easy.more.push}</Text>
+                <Text style={styles.cardHint}>
+                  {push === 'granted' ? ko.easy.more.pushOn : push === 'denied' ? ko.easy.more.pushDenied : ko.easy.more.pushOff}
+                </Text>
+              </View>
+              {/* 아이폰은 앱에서 알림을 끌 수 없다: 켜져 있거나 거절했으면 설정으로, 아직 안 물었으면 바로 묻는다 */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${ko.easy.more.push} ${push === 'granted' ? ko.easy.more.on : ko.easy.more.off}`}
+                accessibilityHint={push === 'undetermined' ? ko.easy.more.pushTurnOn : ko.easy.more.pushSettings}
                 onPress={async () => {
-                  if (me) setPush(await requestPush(me));
+                  if (push === 'undetermined') {
+                    if (me) setPush(await requestPush(me));
+                  } else {
+                    Linking.openSettings();
+                  }
                 }}
-              />
-            ) : push === 'denied' ? (
-              <BigButton variant="outline" label={ko.easy.more.pushSettings} onPress={() => Linking.openSettings()} />
-            ) : null}
+                style={({ pressed }) => [styles.pill, push === 'granted' ? styles.pillOn : styles.pillOff, pressed && styles.pressed]}
+              >
+                <Text style={[styles.pillText, push !== 'granted' && styles.pillTextOff]}>
+                  {push === 'granted' ? ko.easy.more.on : ko.easy.more.off}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         ) : null}
 

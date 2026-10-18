@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, SectionList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/components/easy/BigButton';
@@ -46,6 +46,7 @@ export default function EasyPast() {
   const [cursor, setCursor] = useState<FeedCursor | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // 그룹·이름표·보낸 사람 목록·월별 묶음 수
   useEffect(() => {
@@ -146,6 +147,17 @@ export default function EasyPast() {
         keyExtractor={(row) => row.key}
         contentContainerStyle={styles.list}
         stickySectionHeadersEnabled={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await loadPage(null);
+              setRefreshing(false);
+            }}
+            tintColor={easyColors.text}
+          />
+        }
         onEndReachedThreshold={0.5}
         onEndReached={() => {
           if (cursor && !loading) loadPage(cursor);

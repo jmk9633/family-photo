@@ -221,8 +221,9 @@ export const ko = {
     more: {
       title: '더보기',
       push: '알림',
-      pushOn: '새 사진이 오면 알려드려요',
-      pushOff: '지금은 알림이 오지 않아요',
+      pushOn: '새 사진이 오면 알려드려요. 끄려면 눌러서 설정에서 바꿔요',
+      pushOff: '지금은 알림이 오지 않아요. 누르면 켤 수 있어요',
+      pushDenied: '지금은 알림이 오지 않아요. 눌러서 설정에서 켜 주세요',
       pushTurnOn: '알림 받기',
       pushSettings: '설정에서 알림 켜기',
       showSeen: '내가 본 사진을 가족에게 알리기',
