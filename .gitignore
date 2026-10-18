@@ -44,3 +44,6 @@ example
 
 # 비밀 값 (절대 커밋하지 않음)
 .env
+
+# Firebase 서비스 계정 키 (EAS에만 올리고 커밋 금지)
+*firebase-adminsdk*.json
