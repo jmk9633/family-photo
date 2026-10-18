@@ -231,6 +231,7 @@ export const ko = {
       off: '꺼짐',
       saveFailed: '바꾸지 못했어요. 다시 눌러 주세요',
       toGeneral: '일반 화면으로 바꾸기',
+      devSignOut: '로그아웃 (개발용)',
     },
   },
   date: {

@@ -8,9 +8,9 @@ import { HomeButton } from '@/components/easy/HomeButton';
 import { easyColors, easySize } from '@/components/easy/tokens';
 import { ko } from '@/copy/ko';
 import { useMode } from '@/features/auth/mode';
-import { useSession } from '@/features/auth/session';
+import { signOut, useSession } from '@/features/auth/session';
 import { getShowSeen, setShowSeen } from '@/features/posts/views';
-import { getPushStatus, requestPush, type PushStatus } from '@/features/push/push';
+import { getPushStatus, requestPush, unregisterPush, type PushStatus } from '@/features/push/push';
 import { supabase } from '@/lib/supabase';
 
 // 쉬운 화면 더보기 (와이어프레임 '쉬운 모드 · 더보기', 10/18 결정 12 — 6단계에서는 일부만).
@@ -136,6 +136,19 @@ export default function EasyMore() {
             ) : null}
           </View>
         ) : null}
+
+        {/* 개발용: 가입 없이 연결한 사람은 앱에서 나갈 방법이 없어 테스트할 때만 보여준다 (출시 빌드에는 안 나옴) */}
+        {__DEV__ ? (
+          <BigButton
+            variant="outline"
+            label={ko.easy.more.devSignOut}
+            onPress={async () => {
+              if (me) await unregisterPush(me);
+              await signOut();
+            }}
+            style={isAnonymous ? styles.devBottom : undefined}
+          />
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -159,4 +172,5 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   error: { fontSize: easySize.body, color: easyColors.error },
   bottom: { marginTop: 'auto', gap: 8 },
+  devBottom: { marginTop: 'auto' },
 });
