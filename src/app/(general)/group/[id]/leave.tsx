@@ -8,7 +8,7 @@ import { CheckRow } from '@/components/CheckRow';
 import { colors, size } from '@/components/tokens';
 import { ko } from '@/copy/ko';
 import { useMode } from '@/features/auth/mode';
-import { getGroup, leaveGroup } from '@/features/groups/api';
+import { getGroup, getLeaveWarning, leaveGroup } from '@/features/groups/api';
 import { toGroupErrorMessage } from '@/features/groups/format';
 import { deleteMyPost } from '@/features/posts/remove';
 import { requestAdminNotify } from '@/features/push/notify';
@@ -16,19 +16,24 @@ import { requestAdminNotify } from '@/features/push/notify';
 // 그룹 나가기 (F-LMXBXX). 나가기 전에 '올린 사진은 가족 앨범에 남아요'를 보여주고 확인받는다.
 // '내가 이 그룹에 올린 사진도 지우기'를 고르면:
 //   다른 그룹에도 보낸 묶음은 이 그룹에서만 빠지고, 이 그룹에만 보낸 묶음은 파일과 함께 지운다 (0007).
-// 내가 마지막 관리자였으면 가장 먼저 들어온 구성원이 관리자가 되고, 새 관리자와 그룹에 알림이 간다.
+// 내가 마지막 관리자였으면 계정이 있는 구성원 중 가장 먼저 들어온 사람이 관리자가 되고, 새 관리자와 그룹에 알림이 간다.
+// 남는 사람이 모두 가입 없이 들어온 사람이면 관리할 사람이 없어진다는 경고를 보여준다 (0008, 10/18 결정 A).
 // 마지막 한 명이면 그룹은 보관된다.
 export default function LeaveGroupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { refreshMode } = useMode();
   const [groupName, setGroupName] = useState('');
   const [deleteMine, setDeleteMine] = useState(false);
+  const [noManager, setNoManager] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     getGroup(id)
       .then((g) => setGroupName(g?.name ?? ''))
+      .catch(() => {});
+    getLeaveWarning(id)
+      .then((w) => setNoManager(w.noManager))
       .catch(() => {});
   }, [id]);
 
@@ -65,6 +70,12 @@ export default function LeaveGroupScreen() {
           <Text style={styles.point}>• {ko.leave.photosStay}</Text>
           <Text style={styles.point}>• {ko.leave.adminNote}</Text>
         </View>
+        {noManager ? (
+          <View style={styles.warning} accessible accessibilityLiveRegion="polite">
+            <Text style={styles.warningTitle}>{ko.leave.noManagerTitle}</Text>
+            <Text style={styles.warningText}>{ko.leave.noManagerText}</Text>
+          </View>
+        ) : null}
         <CheckRow
           label={ko.leave.deleteMine}
           hint={ko.leave.deleteMineHint}
@@ -97,6 +108,9 @@ const styles = StyleSheet.create({
   points: { gap: 8 },
   point: { fontSize: size.body, lineHeight: 25, color: colors.text },
   error: { fontSize: size.small, lineHeight: 21, color: colors.error },
+  warning: { gap: 6, padding: 16, borderRadius: size.radius, borderWidth: 1, borderColor: colors.error },
+  warningTitle: { fontSize: size.body, fontWeight: '700', color: colors.error },
+  warningText: { fontSize: size.small, lineHeight: 21, color: colors.text },
   buttons: { gap: 10, paddingBottom: 16 },
   danger: { backgroundColor: colors.error },
 });

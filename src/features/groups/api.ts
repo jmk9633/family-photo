@@ -148,6 +148,13 @@ export async function leaveGroup(groupId: string, deleteMine: boolean): Promise<
   return { deleting: ((data as { deleting?: string[] } | null)?.deleting ?? []) };
 }
 
+/** 내가 나가면 남는 사람이 모두 가입 없이 들어온 사람이라 관리할 사람이 없어지는지 (0008) */
+export async function getLeaveWarning(groupId: string): Promise<{ noManager: boolean }> {
+  const { data, error } = await supabase.rpc('leave_warning', { p_group: groupId });
+  if (error) throw error;
+  return { noManager: !!(data as { no_manager?: boolean } | null)?.no_manager };
+}
+
 /** 관리자가 다른 구성원을 내보낸다 (0007). 올린 사진은 남는다. */
 export async function removeMember(memberId: string): Promise<void> {
   const { error } = await supabase.rpc('remove_member', { p_member: memberId });
