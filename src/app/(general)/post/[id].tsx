@@ -148,7 +148,7 @@ function PostDetail() {
     setHeartLocal(mediaId, on);
     if (on) showToast(post.senderId === me ? ko.detail.heartSentSelf : ko.detail.heartSent(sender ?? ko.feed.unknownSender));
     try {
-      if (on) await addHeart(mediaId, me);
+      if (on) await addHeart(mediaId, post.id, me);
       else await removeHeart(mediaId, me);
     } catch (e) {
       if (__DEV__) console.warn('[heart failed]', e);

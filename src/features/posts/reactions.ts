@@ -1,3 +1,4 @@
+import { requestNotify } from '@/features/push/notify';
 import { supabase } from '@/lib/supabase';
 
 // 하트 (F-CPRPRW, 개발 5단계). 사진·영상 한 장마다 한 사람이 하트 하나.
@@ -26,9 +27,11 @@ export async function listHearts(mediaIds: string[]): Promise<HeartBook> {
   return book;
 }
 
-export async function addHeart(mediaId: string, userId: string): Promise<void> {
+/** 하트를 남기고, 보낸 사람에게 알림을 요청한다 (그 묶음의 첫 하트인지는 서버가 판단) */
+export async function addHeart(mediaId: string, postId: string, userId: string): Promise<void> {
   const { error } = await supabase.from('reactions').insert({ media_id: mediaId, user_id: userId });
   if (error && error.code !== '23505') throw error;
+  requestNotify('heart', postId);
 }
 
 export async function removeHeart(mediaId: string, userId: string): Promise<void> {

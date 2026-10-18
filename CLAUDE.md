@@ -141,8 +141,9 @@ eas build --profile preview         # 기기 테스트용 빌드
 2. 그룹 만들기·초대 (완료)
 3. 보내기 — 사진 (완료)
 4. 보기 + 영상 보내기 (완료)
-5. 반응(하트)·'봤어요' ← 지금 (+ 애플 로그인 우회 제거, 새 사진 푸시)
-6~7. 쉬운 모드 연결, 안부 확인 (MVP)
+5. 반응(하트)·'봤어요' + 애플 로그인 우회 제거 + 푸시 알림 (완료)
+6. 쉬운 모드 연결 ← 다음
+7. 안부 확인 (MVP)
 8. 홈 화면 위젯 (iOS부터)
 9. TV 앱 (삼성 Tizen부터)
 
@@ -153,6 +154,10 @@ eas build --profile preview         # 기기 테스트용 빌드
 - 푸시: 앱은 `features/push/push.ts`로 권한·토큰(devices 표)만 다루고, 보내기는 Edge Function이 Expo 푸시 서비스로 한다.
   Expo 프로젝트 ID는 `app.json`의 `extra.eas.projectId` (`npx eas-cli@latest init`). 애플 푸시 키는 Expo 계정에 등록한다.
   권한은 첫 그룹을 만들거나 들어간 직후 안내 화면(`/notify`)에서 묻는다. 거절하면 내 정보 탭에서 아이폰 설정으로 보낸다.
+  알림 출발은 앱이 기록을 마친 뒤 `requestNotify(type, postId)` → Edge Function `notify` (10/17 결정 A).
+  함수가 부른 사람이 정말 그 일을 했는지 DB로 다시 확인하고, `notification_log`(0004)에 먼저 넣어 같은 알림은 한 번만 보낸다.
+  new_post=받은 그룹 구성원에게, heart=그 사람의 그 묶음 첫 하트만, seen=그날 처음 볼 때만(시청 표시를 끈 사람 제외).
+  배포: `npx supabase functions deploy notify`. 함수는 앱 tsc에서 빼 두었다(tsconfig exclude, Deno로 검사).
 - 카카오·구글 로그인 복귀 주소는 `familyphoto://auth/callback` 고정 (Supabase가 IP 주소 복귀를 거부하므로 Expo Go 기본 주소를 쓰지 않는다).
   Android Expo Go에서는 이 방식이 동작하지 않으므로 Android는 개발 빌드부터 테스트한다.
 - Supabase 카카오는 이메일 동의항목을 항상 요청한다. 카카오 앱은 비즈 앱(개인 개발자)으로 전환하고 이메일은 '선택 동의'로 둔다.

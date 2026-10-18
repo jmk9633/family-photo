@@ -1,3 +1,4 @@
+import { requestNotify } from '@/features/push/notify';
 import { supabase } from '@/lib/supabase';
 
 // '봤어요' (F-BLIYTI, 개발 5단계).
@@ -22,7 +23,10 @@ export async function recordView(postId: string, userId: string): Promise<void> 
   if (error && error.code !== '23505') {
     recorded.delete(key); // 다음에 다시 시도
     if (__DEV__) console.warn('[view record failed]', error);
+    return;
   }
+  // 오늘 처음 본 기록이면 보낸 사람에게 '봤어요' 알림 (시청 표시를 껐으면 서버가 보내지 않는다)
+  if (!error) requestNotify('seen', postId);
 }
 
 /** 묶음 ID → 본 사람 ID (처음 본 순, 한 사람은 한 번). 내가 보낸 묶음만 결과가 있다. */

@@ -1,6 +1,7 @@
 import { File } from 'expo-file-system';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
+import { requestNotify } from '@/features/push/notify';
 import { uuidv4 } from '@/lib/id';
 import { preparePhoto } from '@/lib/image';
 import { prepareVideo } from '@/lib/video';
@@ -184,6 +185,7 @@ async function runSteps(job: SendJob, onProgress: (p: SendProgress) => void): Pr
   await withRetry(() => insertMedia(rows));
   await withRetry(() => attachGroups(postId, job.groupIds));
   await withRetry(() => markReady(postId));
+  requestNotify('new_post', postId); // 받은 그룹 가족에게 '새 사진이 왔어요'
   touchActive(job.userId).catch(() => {});
 }
 
