@@ -12,6 +12,7 @@
     },
     "android": {
       "package": "com.jmk9633.familyphoto",
+      "googleServicesFile": "./google-services.json",
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.RECORD_AUDIO"

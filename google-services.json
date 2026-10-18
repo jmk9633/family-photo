@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "701598285253",
+    "project_id": "family-photo-94d8b",
+    "storage_bucket": "family-photo-94d8b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:701598285253:android:5282b84ad8c9e64b2d5fac",
+        "android_client_info": {
+          "package_name": "com.jmk9633.familyphoto"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCr1-U9d-opmAO-QfjJgPZpK6SU2vX50Uk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
