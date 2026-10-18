@@ -274,10 +274,10 @@ export const ko = {
     until: (month: number, day: number) => `${month}월 ${day}일까지`,
     codeTitle: (name: string) => `${name}님 초대 코드`,
     codeHint: (deadline: string) =>
-      `가족이 앱에서 '초대 코드로 들어가기'를 누르고\n이 숫자를 입력하면 돼요. ${deadline} 쓸 수 있어요.`,
+      `가족이 앱을 열고 '가족이 알려준 숫자가 있어요'를 눌러\n이 숫자를 넣으면 돼요. 이미 가입했다면 가족 탭의\n'초대 코드로 들어가기'에 넣어요. ${deadline} 쓸 수 있어요.`,
     share: '문자·메신저로 보내기',
     shareMessage: (group: string, code: string, deadline: string) =>
-      `[가족 사진] '${group}' 그룹에 초대해요.\n앱에서 '초대 코드로 들어가기'를 누르고 아래 숫자를 입력해 주세요.\n\n초대 코드: ${code}\n(${deadline} 쓸 수 있어요)`,
+      `[가족 사진] '${group}'에 초대해요.\n앱을 열고 '가족이 알려준 숫자가 있어요'를 눌러 아래 숫자를 넣어 주세요.\n(이미 가입했다면 가족 탭의 '초대 코드로 들어가기')\n\n초대 코드: ${code}\n(${deadline} 쓸 수 있어요)`,
     another: '다른 사람도 초대하기',
     toGroup: '그룹으로 가기',
   },
