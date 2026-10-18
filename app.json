@@ -11,6 +11,7 @@
       "usesAppleSignIn": true
     },
     "android": {
+      "package": "com.jmk9633.familyphoto",
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.RECORD_AUDIO"

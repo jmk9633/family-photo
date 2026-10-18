@@ -102,6 +102,7 @@ supabase/tests      RLS 테스트 (pgTAP)
 | 나간 사람의 사진 삭제 | 본인이 요청하면 즉시 | `posts_delete_self` 정책 |
 | 앱 스킴 | `familyphoto` (가칭, 서비스명 확정 시 변경) | `app.json` + Supabase Redirect URLs |
 | iOS 앱 ID (번들 ID) | `com.jmk9633.familyphoto` (가칭, 서비스명 확정 시 변경) | `app.json` `ios.bundleIdentifier` |
+| 안드로이드 앱 ID (패키지 이름) | `com.jmk9633.familyphoto` (iOS와 같게, 가칭. 플레이 스토어에 올린 뒤에는 못 바꿈) | `app.json` `android.package` |
 
 ## 이미지·영상 처리 (앱에서)
 - 사진: 긴 변 2048px 이하 JPEG(품질 0.8), 썸네일 긴 변 480px.
