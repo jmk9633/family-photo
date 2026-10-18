@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { ko } from '@/copy/ko';
 import type { FeedPost } from '@/features/posts/feed';
-import { formatDay } from '@/features/posts/format';
+import { formatDay, titleOf } from '@/features/posts/format';
 
 import { Avatar } from './Avatar';
 import { PostGrid } from './PostGrid';
@@ -24,6 +24,7 @@ const SEEN_FACES_MAX = 5;
 
 export function PostCard({ post, sender, groupNames, seenBy, onOpen }: Props) {
   const name = sender ?? ko.feed.unknownSender;
+  const title = titleOf(post, sender);
   const meta = [formatDay(post.createdAt), groupNames?.length ? groupNames.join(', ') : null]
     .filter(Boolean)
     .join(' · ');
@@ -39,9 +40,9 @@ export function PostCard({ post, sender, groupNames, seenBy, onOpen }: Props) {
           {meta}
         </Text>
       </View>
-      {post.title || post.tags.length > 0 ? (
+      {title || post.tags.length > 0 ? (
         <View style={styles.titleRow}>
-          {post.title ? <Text style={styles.title}>{post.title}</Text> : null}
+          {title ? <Text style={styles.title}>{title}</Text> : null}
           {post.tags.map((t) => (
             <Text key={t} style={styles.tag}>
               #{t}

@@ -35,7 +35,15 @@
           "photosPermission": "가족에게 보낼 사진을 고르려면 사진 보관함 접근을 허용해 주세요."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "가족에게 보낼 사진과 영상 한마디를 찍으려면 카메라를 허용해 주세요.",
+          "microphonePermission": "영상 한마디에 목소리를 담으려면 마이크를 허용해 주세요.",
+          "recordAudioAndroid": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

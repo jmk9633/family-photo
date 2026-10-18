@@ -11,7 +11,8 @@ import { ko } from '@/copy/ko';
 import { useMode } from '@/features/auth/mode';
 import { useSession } from '@/features/auth/session';
 import { albumMonths, senderName, type FeedPost, type MonthCount } from '@/features/posts/feed';
-import { formatDay } from '@/features/posts/format';
+import { formatDay, titleOf } from '@/features/posts/format';
+import { retryOutbox } from '@/features/posts/outbox';
 import { loadEasyFeed, type EasyFeed } from '@/features/posts/unseen';
 import { getPushStatus, requestPush } from '@/features/push/push';
 import { signedSource, signPaths } from '@/lib/signedUrl';
@@ -22,7 +23,7 @@ import { signedSource, signPaths } from '@/lib/signedUrl';
 // - 없으면 최근 사진을 8초마다 천천히 넘겨 보여준다. 이건 시청으로 세지 않는다 (10/18 결정 7).
 // - 아래에 지난 사진 월 카드 2개와 '전체 보기', 오른쪽 위 '더보기'.
 // - 숫자로 막 연결됐으면 '연결됐어요' → (알림 권한을 아직 안 물었으면) 알림 안내를 먼저 보여준다.
-// '사진 찍어 보내기'·'영상 한마디' 버튼은 6-2에서 아래에 붙인다.
+// 아래에 '사진 찍어 보내기'·'영상 한마디' 큰 버튼 두 개 (6-2). 보내지 못해 보관해 둔 것은 홈을 열 때 다시 보낸다.
 
 const SLIDE_MS = 8000;
 const SLIDE_COUNT = 5;
@@ -73,7 +74,13 @@ export default function EasyHome() {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load]),
+      // 보내지 못해 보관해 둔 사진·영상 한마디가 있으면 다시 보낸다 (6-2)
+      retryOutbox(me)
+        .then((n) => {
+          if (n > 0) load();
+        })
+        .catch(() => {});
+    }, [load, me]),
   );
 
   // 아래로 당기면 새로 읽는다 (화면에 돌아올 때도 새로 읽으므로 이것만이 유일한 방법은 아니다)
@@ -192,6 +199,24 @@ export default function EasyHome() {
           </>
         ) : null}
       </ScrollView>
+
+      {/* 사진 찍어 보내기·영상 한마디 (6-2, 와이어프레임 홈 하단) */}
+      <SafeAreaView edges={['bottom']} style={styles.footer}>
+        <BigButton
+          variant="outline"
+          icon="camera-outline"
+          label={ko.easy.camera.takePhoto}
+          onPress={() => router.push({ pathname: '/camera', params: { kind: 'photo' } })}
+          style={styles.footerButton}
+        />
+        <BigButton
+          variant="outline"
+          icon="videocam-outline"
+          label={ko.easy.camera.videoMessage}
+          onPress={() => router.push({ pathname: '/camera', params: { kind: 'video' } })}
+          style={styles.footerButton}
+        />
+      </SafeAreaView>
     </SafeAreaView>
   );
 }
@@ -215,7 +240,7 @@ function bigSource(p: FeedPost) {
 function NewPostCard({ post, sender }: { post: FeedPost; sender: string }) {
   const { source, placeholder } = bigSource(post);
   const open = () => router.push({ pathname: '/play/[id]', params: { id: post.id } });
-  const sub = [post.title, formatDay(post.createdAt)].filter(Boolean).join(' · ');
+  const sub = [titleOf(post, sender), formatDay(post.createdAt)].filter(Boolean).join(' · ');
   return (
     <View style={styles.newCard}>
       <Pressable
@@ -261,11 +286,12 @@ function QuietSlides({ posts, nameOf }: { posts: FeedPost[]; nameOf: (p: FeedPos
   if (!post) return null;
   const { source, placeholder } = bigSource(post);
   const caption = [formatDay(post.createdAt), ko.easy.home.sentByShort(nameOf(post))].join(' · ');
+  const title = titleOf(post, nameOf(post));
   return (
     <>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={ko.easy.home.recentLabel(post.title ?? '', caption)}
+        accessibilityLabel={ko.easy.home.recentLabel(title ?? '', caption)}
         onPress={() => router.push({ pathname: '/play/[id]', params: { id: post.id } })}
         style={styles.quiet}
       >
@@ -281,7 +307,7 @@ function QuietSlides({ posts, nameOf }: { posts: FeedPost[]; nameOf: (p: FeedPos
           <Text style={styles.recentTagText}>{ko.easy.home.recent}</Text>
         </View>
         <View style={styles.caption}>
-          {post.title ? <Text style={styles.captionTitle}>{post.title}</Text> : null}
+          {title ? <Text style={styles.captionTitle}>{title}</Text> : null}
           <Text style={styles.captionSub}>{caption}</Text>
           {posts.length > 1 ? (
             <View style={styles.dots}>
@@ -332,6 +358,17 @@ function NotifyAsk({ onAllow, onLater }: { onAllow: () => void; onLater: () => v
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: easyColors.background },
+  footer: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: easySize.gutter,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    backgroundColor: easyColors.background,
+  },
+  footerButton: { flex: 1, paddingHorizontal: 8 },
   header: {
     paddingHorizontal: easySize.gutter,
     paddingTop: 8,

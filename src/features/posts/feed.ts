@@ -22,6 +22,7 @@ export type FeedMedia = {
 
 export type FeedPost = {
   id: string;
+  kind: 'normal' | 'video_message';
   senderId: string;
   title: string | null;
   tags: string[];
@@ -42,6 +43,7 @@ export type FeedCursor = { createdAt: string; id: string };
 
 type PostRow = {
   id: string;
+  kind: 'normal' | 'video_message';
   sender_id: string;
   title: string | null;
   tags: string[] | null;
@@ -60,12 +62,13 @@ type PostRow = {
 };
 
 const POST_COLUMNS =
-  'id, sender_id, title, tags, created_at, post_groups!inner(group_id), ' +
+  'id, kind, sender_id, title, tags, created_at, post_groups!inner(group_id), ' +
   'media(id, type, path, thumb_path, width, height, duration_sec, sort_order)';
 
 function toPost(row: PostRow): FeedPost {
   return {
     id: row.id,
+    kind: row.kind ?? 'normal',
     senderId: row.sender_id,
     title: row.title,
     tags: row.tags ?? [],

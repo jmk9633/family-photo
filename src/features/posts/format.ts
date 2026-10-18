@@ -35,6 +35,15 @@ export function formatDay(iso: string): string {
   return p.y === now.y ? ko.date.day(p.m, p.d) : ko.date.dayWithYear(p.y, p.m, p.d);
 }
 
+/**
+ * 묶음 제목: 영상 한마디는 저장한 제목 대신 'OO의 영상 한마디' (6단계 결정 10), 그 밖에는 보낸 사람이 붙인 제목.
+ * 이름은 화면마다 쓰는 보낸 사람 이름 규칙(senderName)을 그대로 받는다.
+ */
+export function titleOf(post: { kind?: string; title: string | null }, sender: string | null): string | null {
+  if (post.kind === 'video_message') return ko.feed.videoMessage(sender ?? ko.feed.unknownSender);
+  return post.title;
+}
+
 /** 그 달의 며칠인지 (한국 시간) */
 export function dayOfMonth(iso: string): number {
   return kstParts(iso).d;

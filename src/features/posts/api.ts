@@ -97,10 +97,11 @@ export async function createPost(
   userId: string,
   title: string | null,
   tags: string[],
+  kind: 'normal' | 'video_message' = 'normal',
 ): Promise<void> {
   const { error } = await supabase
     .from('posts')
-    .insert({ id: postId, sender_id: userId, kind: 'normal', title, tags, status: 'uploading' });
+    .insert({ id: postId, sender_id: userId, kind, title, tags, status: 'uploading' });
   if (error && !isDuplicate(error)) throw error;
 }
 

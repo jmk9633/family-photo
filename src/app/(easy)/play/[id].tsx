@@ -16,7 +16,7 @@ import { ko } from '@/copy/ko';
 import { useSession } from '@/features/auth/session';
 import { listMyGroups } from '@/features/groups/api';
 import { getPost, listNameBook, senderName, type FeedMedia, type FeedPost, type NameBook } from '@/features/posts/feed';
-import { formatDay } from '@/features/posts/format';
+import { formatDay, titleOf } from '@/features/posts/format';
 import { addHeart, listHearts, removeHeart, type HeartBook } from '@/features/posts/reactions';
 import { loadEasyFeed } from '@/features/posts/unseen';
 import { recordView } from '@/features/posts/views';
@@ -168,7 +168,7 @@ export default function EasyPlay() {
     );
   }
 
-  if (done) return <Done post={post} me={me} />;
+  if (done) return <Done post={post} me={me} sender={sender} />;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -211,7 +211,7 @@ export default function EasyPlay() {
             ))}
           </View>
         ) : null}
-        {post.title ? <Text style={styles.postTitle}>{post.title}</Text> : null}
+        {titleOf(post, sender) ? <Text style={styles.postTitle}>{titleOf(post, sender)}</Text> : null}
         <Text style={styles.meta}>{ko.easy.play.sentBy(sender, formatDay(post.createdAt))}</Text>
       </View>
 
@@ -308,7 +308,7 @@ function EasyVideo({
 }
 
 /** 다 봤어요: 아직 안 본 새 묶음이 더 있으면 '다음 사진 보기' */
-function Done({ post, me }: { post: FeedPost; me: string }) {
+function Done({ post, me, sender }: { post: FeedPost; me: string; sender: string }) {
   const [nextPost, setNextPost] = useState<{ post: FeedPost; sender: string } | null | undefined>(undefined);
 
   useEffect(() => {
@@ -324,7 +324,7 @@ function Done({ post, me }: { post: FeedPost; me: string }) {
       .catch(() => setNextPost(null));
   }, [me, post.id]);
 
-  const summary = ko.easy.play.doneSummary(post.title ?? formatDay(post.createdAt), post.media.length);
+  const summary = ko.easy.play.doneSummary(titleOf(post, sender) ?? formatDay(post.createdAt), post.media.length);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -347,7 +347,9 @@ function Done({ post, me }: { post: FeedPost; me: string }) {
               accessibilityIgnoresInvertColors
             />
             <View style={styles.nextText}>
-              {nextPost.post.title ? <Text style={styles.nextTitle}>{nextPost.post.title}</Text> : null}
+              {titleOf(nextPost.post, nextPost.sender) ? (
+                <Text style={styles.nextTitle}>{titleOf(nextPost.post, nextPost.sender)}</Text>
+              ) : null}
               <Text style={styles.nextSub}>
                 {ko.easy.play.nextSub(nextPost.sender, nextPost.post.media.length)}
               </Text>

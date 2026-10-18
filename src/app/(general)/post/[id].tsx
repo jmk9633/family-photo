@@ -30,7 +30,7 @@ import {
   type FeedPost,
   type NameBook,
 } from '@/features/posts/feed';
-import { formatDay } from '@/features/posts/format';
+import { formatDay, titleOf } from '@/features/posts/format';
 import { addHeart, listHearts, removeHeart, type HeartBook } from '@/features/posts/reactions';
 import { deleteMyPost } from '@/features/posts/remove';
 import { recordView } from '@/features/posts/views';
@@ -275,7 +275,7 @@ function PostDetail() {
 
           <View style={styles.bottom}>
             <View style={styles.info}>
-              <Text style={styles.title}>{post.title ?? formatDay(post.createdAt)}</Text>
+              <Text style={styles.title}>{titleOf(post, sender) ?? formatDay(post.createdAt)}</Text>
               {post.tags.length > 0 ? (
                 <Text style={styles.tags}>{post.tags.map((t) => `#${t}`).join('  ')}</Text>
               ) : null}

@@ -20,7 +20,7 @@ import {
   type FeedPost,
   type NameBook,
 } from '@/features/posts/feed';
-import { dayOfMonth, monthKey } from '@/features/posts/format';
+import { dayOfMonth, monthKey, titleOf } from '@/features/posts/format';
 import { signedSource, signPaths } from '@/lib/signedUrl';
 
 // 쉬운 화면 지난 사진 (F-JQQCZR, 와이어프레임 '쉬운 모드 · 지난 사진').
@@ -177,7 +177,7 @@ export default function EasyPast() {
             {item.items.map((p) => {
               const name = nameOf(p.senderId, p.groupIds);
               const sub = ko.easy.past.card(dayOfMonth(p.createdAt), name, p.media.length);
-              const title = p.title ?? ko.easy.past.untitled;
+              const title = titleOf(p, name) ?? ko.easy.past.untitled;
               return (
                 <Pressable
                   key={p.id}

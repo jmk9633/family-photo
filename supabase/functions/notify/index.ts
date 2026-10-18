@@ -27,7 +27,11 @@ const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 // 알림 문구 (10/17 사용자 확인)
 const copy = {
-  newPost: { title: '새 사진이 왔어요', body: (name: string, what: string) => `${iga(name)} ${what} 보냈어요` },
+  newPost: {
+    title: '새 사진이 왔어요',
+    body: (name: string, what: string) => `${iga(name)} ${what} 보냈어요`,
+    videoMessage: (name: string) => `${iga(name)} 영상 한마디를 보냈어요`,
+  },
   heart: { title: '하트를 받았어요', body: (name: string) => `${iga(name)} 보낸 사진을 좋아해요` },
   seen: { title: '가족이 사진을 봤어요', body: (name: string) => `${iga(name)} 보낸 사진을 봤어요` },
   joined: { title: '가족이 들어왔어요', body: (name: string, group: string) => `${iga(name)} ${group}에 들어왔어요` },
@@ -103,7 +107,7 @@ Deno.serve(async (req) => {
   // 2) 묶음 (완료된 것만)
   const { data: post } = await admin
     .from('posts')
-    .select('id, sender_id, status, post_groups(group_id), media(type)')
+    .select('id, kind, sender_id, status, post_groups(group_id), media(type)')
     .eq('id', postId)
     .maybeSingle();
   if (!post || post.status !== 'ready') return json(200, { sent: 0, reason: 'post' });
@@ -173,7 +177,7 @@ Deno.serve(async (req) => {
   }
 });
 
-type PostRow = { id: string; sender_id: string; media: { type: string }[] | null };
+type PostRow = { id: string; kind?: string; sender_id: string; media: { type: string }[] | null };
 
 async function deliver(
   admin: SupabaseClient,
@@ -206,7 +210,10 @@ async function deliver(
   const videos = (post.media ?? []).filter((m) => m.type === 'video').length;
   const text = (recipient: string) => {
     const name = nameFor(recipient);
-    if (kind === 'new_post') return { title: copy.newPost.title, body: copy.newPost.body(name, mediaPhrase(photos, videos)) };
+    if (kind === 'new_post') {
+      if (post.kind === 'video_message') return { title: copy.newPost.title, body: copy.newPost.videoMessage(name) };
+      return { title: copy.newPost.title, body: copy.newPost.body(name, mediaPhrase(photos, videos)) };
+    }
     if (kind === 'heart') return { title: copy.heart.title, body: copy.heart.body(name) };
     return { title: copy.seen.title, body: copy.seen.body(name) };
   };

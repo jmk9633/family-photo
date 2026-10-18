@@ -26,6 +26,9 @@ import { classifyPrepare, classifyRemote, isPermanent, SendError } from './sendE
 export const MAX_PER_POST = 30; // DB 트리거 too_many_media와 같은 값
 export const TITLE_MAX = 60; // posts.title check와 같은 값
 
+/** 묶음 종류: 일반 / 쉬운 화면 영상 한마디 (받는 쪽에 'OO의 영상 한마디'로 보인다) */
+export type PostKind = 'normal' | 'video_message';
+
 export type PickedMedia = {
   type: 'photo' | 'video';
   uri: string;
@@ -44,6 +47,7 @@ export type SendJob = {
   title: string | null;
   tags: string[];
   groupIds: string[];
+  kind?: PostKind; // 없으면 일반
   // 진행 상태 (다시 보낼 때 이어서)
   postId: string;
   postCreated: boolean;
@@ -135,7 +139,7 @@ export function dropItem(job: SendJob, index: number): number {
 
 async function runSteps(job: SendJob, onProgress: (p: SendProgress) => void): Promise<void> {
   if (!job.postCreated) {
-    await withRetry(() => createPost(job.postId, job.userId, job.title, job.tags));
+    await withRetry(() => createPost(job.postId, job.userId, job.title, job.tags, job.kind ?? 'normal'));
     job.postCreated = true;
   }
   const postId = job.postId;
