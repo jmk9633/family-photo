@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
+  Alert,
   ActivityIndicator,
   FlatList,
   Pressable,
@@ -31,6 +32,7 @@ import {
 } from '@/features/posts/feed';
 import { formatDay } from '@/features/posts/format';
 import { addHeart, listHearts, removeHeart, type HeartBook } from '@/features/posts/reactions';
+import { deleteMyPost } from '@/features/posts/remove';
 import { recordView } from '@/features/posts/views';
 import { signedSource, signPaths } from '@/lib/signedUrl';
 
@@ -170,6 +172,27 @@ function PostDetail() {
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
+  // 내가 보낸 묶음 지우기 (F-LMXBXX: 자기 사진은 개별로 언제든 지울 수 있다). 받은 모든 그룹에서 사라진다.
+  function confirmDelete() {
+    if (!post) return;
+    Alert.alert(ko.detail.deleteTitle, ko.detail.deleteText, [
+      { text: ko.common.cancel, style: 'cancel' },
+      {
+        text: ko.detail.deleteConfirm,
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteMyPost(post.id);
+            close();
+          } catch (e) {
+            if (__DEV__) console.warn('[post delete failed]', e);
+            showToast(ko.detail.deleteFailed);
+          }
+        },
+      },
+    ]);
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
@@ -188,7 +211,19 @@ function PostDetail() {
             {ko.detail.position(at + 1, total)}
           </Text>
         ) : null}
-        <View style={styles.iconButton} />
+        {post && post.senderId === me ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={ko.detail.delete}
+            onPress={confirmDelete}
+            hitSlop={8}
+            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="trash-outline" size={26} color="#FFFFFF" />
+          </Pressable>
+        ) : (
+          <View style={styles.iconButton} />
+        )}
       </View>
 
       {failed ? (

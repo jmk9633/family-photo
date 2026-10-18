@@ -1,6 +1,6 @@
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -13,6 +13,7 @@ import {
   listMembers,
   listOpenInvites,
   reissueInvite,
+  removeMember,
   setMyDisplayName,
   type Group,
   type Invite,
@@ -26,8 +27,9 @@ import {
   toGroupErrorMessage,
 } from '@/features/groups/format';
 
-// 그룹 화면 (2단계 범위): 구성원과 태그, 내 이름 바꾸기, 관리자의 초대하기·보낸 초대 목록.
-// 연결된 기기·안부 확인·합치기·나가기는 각 단계에서 추가한다.
+// 그룹 화면: 구성원과 태그, 내 이름 바꾸기, 관리자의 초대하기·보낸 초대 목록,
+// 관리자의 구성원 내보내기(구성원을 누르면 확인 창), 맨 아래 그룹 나가기 (F-LMXBXX, 6단계).
+// 연결된 기기·안부 확인·합치기는 각 단계에서 추가한다.
 export default function GroupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { session } = useSession();
@@ -91,6 +93,28 @@ export default function GroupScreen() {
       setReissuing(null);
       load();
     }
+  }
+
+  function confirmRemove(m: Member) {
+    const name = m.display_name || ko.feed.unknownSender;
+    Alert.alert(ko.group.removeTitle(name), ko.group.removeText, [
+      { text: ko.common.cancel, style: 'cancel' },
+      {
+        text: ko.group.removeConfirm,
+        style: 'destructive',
+        onPress: async () => {
+          setNotice(null);
+          try {
+            await removeMember(m.id);
+            setNotice(ko.group.removed(name));
+          } catch (e) {
+            setNotice(toGroupErrorMessage(e));
+          } finally {
+            load();
+          }
+        },
+      },
+    ]);
   }
 
   async function share(invite: Invite) {
@@ -163,19 +187,32 @@ export default function GroupScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{ko.group.members(members.length)}</Text>
           <View style={styles.card}>
-            {members.map((m, i) => (
-              <View key={m.id} style={[styles.row, i > 0 && styles.rowDivider]}>
-                <Text style={styles.memberName}>
-                  {m.display_name || '—'}
-                  {m.user_id === myId ? <Text style={styles.muted}> {ko.group.me}</Text> : null}
-                </Text>
-                <View style={styles.tagRow}>
-                  {m.is_admin ? <Tag label={ko.group.tags.admin} strong /> : null}
-                  {m.easy_mode ? <Tag label={ko.group.tags.easy} /> : null}
-                  {m.wellbeing_check ? <Tag label={ko.group.tags.wellbeing} /> : null}
-                </View>
-              </View>
-            ))}
+            {members.map((m, i) => {
+              const canRemove = isAdmin && m.user_id !== myId;
+              return (
+                <Pressable
+                  key={m.id}
+                  disabled={!canRemove}
+                  accessibilityRole={canRemove ? 'button' : undefined}
+                  accessibilityLabel={canRemove ? ko.group.memberLabel(m.display_name || ko.feed.unknownSender) : undefined}
+                  onPress={() => confirmRemove(m)}
+                  style={({ pressed }) => [styles.row, i > 0 && styles.rowDivider, pressed && styles.pressed]}
+                >
+                  <View style={styles.memberTop}>
+                    <Text style={styles.memberName}>
+                      {m.display_name || '—'}
+                      {m.user_id === myId ? <Text style={styles.muted}> {ko.group.me}</Text> : null}
+                    </Text>
+                    {canRemove ? <Text style={styles.more}>⋯</Text> : null}
+                  </View>
+                  <View style={styles.tagRow}>
+                    {m.is_admin ? <Tag label={ko.group.tags.admin} strong /> : null}
+                    {m.easy_mode ? <Tag label={ko.group.tags.easy} /> : null}
+                    {m.wellbeing_check ? <Tag label={ko.group.tags.wellbeing} /> : null}
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
 
@@ -259,6 +296,15 @@ export default function GroupScreen() {
             </View>
           </View>
         ) : null}
+
+        {me ? (
+          <Button
+            variant="text"
+            label={ko.group.leave}
+            onPress={() => router.push({ pathname: '/group/[id]/leave', params: { id } })}
+            style={styles.leave}
+          />
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -295,7 +341,11 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderColor: colors.border, borderRadius: size.radius },
   row: { paddingVertical: 14, paddingHorizontal: 16, gap: 8 },
   rowDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-  memberName: { fontSize: size.body, fontWeight: '700', color: colors.text },
+  memberName: { flex: 1, fontSize: size.body, fontWeight: '700', color: colors.text },
+  memberTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  more: { fontSize: 22, color: colors.textSecondary, paddingHorizontal: 4 },
+  pressed: { opacity: 0.6 },
+  leave: { marginTop: 8 },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: colors.surface },
   tagStrong: { backgroundColor: colors.text },

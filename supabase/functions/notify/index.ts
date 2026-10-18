@@ -9,6 +9,8 @@
 //   seen    : 내가 그 묶음을 오늘 봤다 → 보낸 사람에게 (사람·묶음·날짜당 한 번, 시청 표시를 끈 사람은 안 보냄)
 //   joined  : 내가 초대 코드로 그 그룹에 방금(10분 안) 들어왔다 → 그 그룹의 다른 활성 구성원 모두에게
 //             ({ type, groupId }, 같은 합류는 한 번 — join_notification_log 0006, 6단계 10/18 결정)
+//   admin_changed: 내가 그 그룹을 방금(10분 안) 나가 관리자가 자동으로 넘어갔다 → 새 관리자와 그룹 구성원 모두에게
+//             ({ type, groupId }, 이전 한 건당 한 번 — admin_transfer_log 0007, F-LMXBXX)
 //
 // 이름은 받는 사람이 보는 그룹에서의 이름 (그 묶음을 받은 그룹 중 받는 사람이 먼저 들어간 그룹).
 // 쉬운 모드 사용자의 밤(21~8시) 알림 모으기는 6단계에서 쉬운 모드를 붙일 때 더한다.
@@ -29,6 +31,8 @@ const copy = {
   heart: { title: '하트를 받았어요', body: (name: string) => `${iga(name)} 보낸 사진을 좋아해요` },
   seen: { title: '가족이 사진을 봤어요', body: (name: string) => `${iga(name)} 보낸 사진을 봤어요` },
   joined: { title: '가족이 들어왔어요', body: (name: string, group: string) => `${iga(name)} ${group}에 들어왔어요` },
+  adminMe: { title: '관리자가 되었어요', body: (group: string) => `이제 ${group}의 관리자예요. 가족을 초대하고 설정을 바꿀 수 있어요` },
+  adminOthers: { title: '관리자가 바뀌었어요', body: (name: string, group: string) => `이제 ${iga(name)} ${group}의 관리자예요` },
   family: '가족',
 };
 
@@ -91,6 +95,7 @@ Deno.serve(async (req) => {
     return json(400, { error: 'body' });
   }
   if (input.type === 'joined') return await handleJoined(admin, me, input.groupId ?? '');
+  if (input.type === 'admin_changed') return await handleAdminChanged(admin, me, input.groupId ?? '');
   const kind = input.type as Kind;
   const postId = input.postId ?? '';
   if (!KINDS.includes(kind) || !/^[0-9a-f-]{36}$/i.test(postId)) return json(400, { error: 'input' });
@@ -305,6 +310,61 @@ async function handleJoined(admin: SupabaseClient, me: string, groupId: string):
     console.error('[notify] joined deliver failed', e);
     return json(502, { error: 'deliver' });
   }
+}
+
+/** 관리자 자동 이전 알림: 그 그룹을 방금 나간 사람(또는 지금 구성원)만 부를 수 있고, 이전 한 건당 한 번 */
+async function handleAdminChanged(admin: SupabaseClient, me: string, groupId: string): Promise<Response> {
+  if (!/^[0-9a-f-]{36}$/i.test(groupId)) return json(400, { error: 'input' });
+  const since = new Date(Date.now() - JOIN_FRESH_MS).toISOString();
+  const { data: mine } = await admin
+    .from('members')
+    .select('status, left_at')
+    .eq('group_id', groupId)
+    .eq('user_id', me)
+    .maybeSingle();
+  const allowed = !!mine && (mine.status === 'active' || (!!mine.left_at && mine.left_at >= since));
+  if (!allowed) return json(200, { sent: 0, reason: 'not_member' });
+
+  // 아직 안 알린 최근 이전 기록을 '알림'으로 표시하면서 가져온다 (동시에 불러도 한 번만)
+  const { data: logs } = await admin
+    .from('admin_transfer_log')
+    .update({ notified_at: new Date().toISOString() })
+    .eq('group_id', groupId)
+    .is('notified_at', null)
+    .gte('created_at', since)
+    .select('id, member_id');
+  if (!logs || logs.length === 0) return json(200, { sent: 0, reason: 'none' });
+
+  const { data: group } = await admin.from('groups').select('name').eq('id', groupId).maybeSingle();
+  const { data: active } = await admin
+    .from('members')
+    .select('id, user_id, display_name')
+    .eq('group_id', groupId)
+    .eq('status', 'active');
+  const members = (active ?? []) as { id: string; user_id: string; display_name: string }[];
+  let sent = 0;
+  for (const log of logs as { id: string; member_id: string }[]) {
+    const newAdmin = members.find((m) => m.id === log.member_id);
+    if (!newAdmin) continue;
+    const name = newAdmin.display_name || copy.family;
+    const groupName = group?.name ?? '';
+    try {
+      sent += await pushTo(
+        admin,
+        members.map((m) => m.user_id),
+        (r) =>
+          r === newAdmin.user_id
+            ? { title: copy.adminMe.title, body: copy.adminMe.body(groupName) }
+            : { title: copy.adminOthers.title, body: copy.adminOthers.body(name, groupName) },
+        { groupId, kind: 'admin_changed' },
+      );
+    } catch (e) {
+      await admin.from('admin_transfer_log').update({ notified_at: null }).eq('id', log.id);
+      console.error('[notify] admin_changed deliver failed', e);
+      return json(502, { error: 'deliver' });
+    }
+  }
+  return json(200, { sent });
 }
 
 /** 토큰 → 그 토큰을 가장 최근에 쓴 계정 */

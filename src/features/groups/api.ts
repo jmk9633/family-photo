@@ -138,6 +138,22 @@ export async function reissueInvite(inviteId: string): Promise<IssuedInvite> {
   return (data as IssuedInvite[])[0];
 }
 
+/**
+ * 그룹 나가기 (0007). deleteMine이면 다른 그룹에도 보낸 내 묶음은 이 그룹에서만 빠지고,
+ * 이 그룹에만 보낸 내 묶음은 'deleting'이 되어 ID가 돌아온다 → 앱이 파일과 함께 지운다.
+ */
+export async function leaveGroup(groupId: string, deleteMine: boolean): Promise<{ deleting: string[] }> {
+  const { data, error } = await supabase.rpc('leave_group', { p_group: groupId, p_delete_my_posts: deleteMine });
+  if (error) throw error;
+  return { deleting: ((data as { deleting?: string[] } | null)?.deleting ?? []) };
+}
+
+/** 관리자가 다른 구성원을 내보낸다 (0007). 올린 사진은 남는다. */
+export async function removeMember(memberId: string): Promise<void> {
+  const { error } = await supabase.rpc('remove_member', { p_member: memberId });
+  if (error) throw error;
+}
+
 export async function redeemInvite(
   code: string,
 ): Promise<{ status: RedeemStatus; groupId?: string }> {

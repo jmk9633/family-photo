@@ -15,6 +15,11 @@ export function requestJoinNotify(groupId: string): void {
   invoke('joined', { type: 'joined', groupId });
 }
 
+/** 그룹을 나간 뒤: 관리자가 자동으로 넘어갔다면 새 관리자와 그룹에 알린다 (넘어갔는지는 서버가 확인) */
+export function requestAdminNotify(groupId: string): void {
+  invoke('admin_changed', { type: 'admin_changed', groupId });
+}
+
 function invoke(type: string, body: Record<string, string>): void {
   supabase.functions
     .invoke('notify', { body })

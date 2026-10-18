@@ -30,7 +30,7 @@ const SLIDE_COUNT = 5;
 export default function EasyHome() {
   const { session } = useSession();
   const me = session?.user.id ?? '';
-  const { welcome, setWelcome } = useMode();
+  const { welcome, setWelcome, isAnonymous, refreshMode } = useMode();
   const [step, setStep] = useState<'welcome' | 'notify' | 'home'>(welcome !== null ? 'welcome' : 'home');
   // 더보기에서 다른 가족과도 연결하고 돌아오면 '연결됐어요'를 다시 보여준다
   useEffect(() => {
@@ -47,6 +47,11 @@ export default function EasyHome() {
     setFailed(false);
     try {
       const f = await loadEasyFeed(me);
+      // 가입 없이 연결한 사람이 모든 그룹에서 내보내지면 처음 화면(숫자 입력)으로 돌아간다
+      if (isAnonymous && f.groups.length === 0) {
+        await refreshMode();
+        return;
+      }
       const groupIds = f.groups.map((g) => g.id);
       const [m] = await Promise.all([
         albumMonths(groupIds).catch(() => [] as MonthCount[]),
@@ -63,7 +68,7 @@ export default function EasyHome() {
       if (__DEV__) console.warn('[easy home load failed]', e);
       setFailed(true);
     }
-  }, [me]);
+  }, [me, isAnonymous, refreshMode]);
 
   useFocusEffect(
     useCallback(() => {

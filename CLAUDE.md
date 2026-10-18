@@ -65,6 +65,12 @@ supabase/tests      RLS 테스트 (pgTAP)
 - 하트·시청의 활동 시각(`last_active_at`)은 DB 트리거(`touch_last_active`)가 갱신한다. 앱이 따로 부르지 않는다.
 - 표시 이름: 가입 시 카카오·구글 이름이 `profiles.display_name` 기본값. 그룹 만들기·합류 화면에서 미리 채워 고칠 수 있게 하고, 그룹별 이름(`members.display_name`)은 `set_my_display_name`으로 언제든 본인이 바꾼다.
 - 그룹 만들기는 `create_group` RPC로만 한다 (`groups`에 직접 insert 금지).
+- 그룹 나가기는 `leave_group(그룹, 내 사진도 지울지)`, 내보내기는 `remove_member(구성원)` RPC로만 한다 (0007, F-LMXBXX).
+  나간·내보내진 사람이 올린 사진은 기본으로 남는다. '내 사진도 지우기'는 다른 그룹에도 보낸 묶음은 이 그룹에서만 빼고,
+  이 그룹에만 보낸 묶음은 `deleting`(아무에게도 안 보임)으로 바꾼 뒤 앱이 `deleteMyPost`(저장소 파일 먼저 → 묶음)로 지운다.
+  남은 `deleting` 묶음은 7단계 정리 작업이 지운다. 관리자가 0명이 되면 가장 먼저 들어온 구성원이 관리자가 되고
+  `admin_transfer_log`에 남아, 앱이 `requestAdminNotify(groupId)`를 부르면 새 관리자와 그룹에 한 번 알린다.
+- 내가 보낸 묶음은 사진 상세의 휴지통으로 언제든 지운다(받은 모든 그룹에서 사라짐).
 - 활동(앱 실행·시청·반응·보내기) 때마다 `profiles.last_active_at`을 갱신한다. 위젯 노출은 활동이 아니다.
 - 숫자 집계(본 사람 수, 하트 수)는 화면에 표시하지 않는다. 이름·얼굴만 보여준다.
 - 목록은 `ready` 묶음만, 같은 묶음은 '모든 가족'에서 한 번만 (posts 1행 + 내가 볼 수 있는 post_groups만 딸려 옴).
@@ -82,6 +88,7 @@ supabase/tests      RLS 테스트 (pgTAP)
 | 영상·영상 한마디 | 최대 1분 | 앱: 고르기 버튼 아래 안내 + 고른 뒤 길이 검사로 빼고 알림, DB: `media.duration_sec` 검사 |
 | 서명 URL | 유효 1시간, 10분 남으면 새로 받음. 화면에는 `cacheKey = 저장 경로`로 넘김 | `src/lib/signedUrl.ts` |
 | 끝나지 않은 업로드 | 24시간 뒤 묶음과 파일 삭제 | Edge Function (예약) |
+| 지우는 중(deleting) 묶음 | 앱이 못 지운 것은 정리 작업이 묶음과 파일 삭제 | Edge Function (예약, 7단계) |
 | 쉬운 모드 자동 넘김 | 폰은 '쭉 보기'를 눌렀을 때만, 8초. TV는 자동 8초 | 앱 |
 | '봤어요' | 묶음에서 한 장이라도 보면 기록 | 앱 → `post_views` |
 | 하트 알림 | 묶음별로 모아 한 번 | Edge Function |
@@ -157,6 +164,7 @@ eas build --profile preview         # 기기 테스트용 빌드
   알림 출발은 앱이 기록을 마친 뒤 `requestNotify(type, postId)` → Edge Function `notify` (10/17 결정 A).
   함수가 부른 사람이 정말 그 일을 했는지 DB로 다시 확인하고, `notification_log`(0004)에 먼저 넣어 같은 알림은 한 번만 보낸다.
   new_post=받은 그룹 구성원에게, heart=그 사람의 그 묶음 첫 하트만, seen=그날 처음 볼 때만(시청 표시를 끈 사람 제외).
+  admin_changed=그룹을 나가 관리자가 자동으로 넘어갔을 때 → 새 관리자('관리자가 되었어요')와 그룹('관리자가 바뀌었어요')에게 (0007).
   joined=초대 코드로 방금(10분 안) 들어온 사람 → 그 그룹 다른 구성원 모두에게 '가족이 들어왔어요'(`requestJoinNotify(groupId)`, 한 번만은 `join_notification_log` 0006).
   배포: `npx supabase functions deploy notify`. 함수는 앱 tsc에서 빼 두었다(tsconfig exclude, Deno로 검사).
 - 카카오·구글 로그인 복귀 주소는 `familyphoto://auth/callback` 고정 (Supabase가 IP 주소 복귀를 거부하므로 Expo Go 기본 주소를 쓰지 않는다).

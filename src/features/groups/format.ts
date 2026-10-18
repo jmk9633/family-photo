@@ -30,6 +30,8 @@ export function toGroupErrorMessage(error: unknown): string {
   if (msg.includes('forbidden')) return ko.groupErrors.forbidden;
   if (msg.includes('already_used')) return ko.groupErrors.alreadyUsed;
   if (msg.includes('already_revoked')) return ko.groupErrors.alreadyRevoked;
+  if (msg.includes('not_member')) return ko.groupErrors.notMember;
+  if (msg.includes('use_leave')) return ko.groupErrors.useLeave;
   // 개발 중에는 원인을 바로 볼 수 있게 오류 원문을 터미널과 화면에 함께 보여준다.
   if (__DEV__) {
     const detail = JSON.stringify(error);

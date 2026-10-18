@@ -115,6 +115,12 @@ export const ko = {
     heartSentSelf: '좋아요를 눌렀어요',
     heartFailed: '하트를 보내지 못했어요',
     heartNames: (names: string[]) => `${iga(names.join(', '))} 좋아해요`,
+    // 내가 보낸 묶음 지우기 (F-LMXBXX '자기 사진은 개별로 삭제')
+    delete: '이 묶음 지우기',
+    deleteTitle: '이 묶음을 지울까요?',
+    deleteText: '보낸 모든 가족 앨범에서 사라지고 되돌릴 수 없어요.',
+    deleteConfirm: '지우기',
+    deleteFailed: '지우지 못했어요. 다시 시도해 주세요',
   },
   // 앨범 탭 (F-HEETWR)
   album: {
@@ -303,6 +309,23 @@ export const ko = {
     reissued: (name: string) => `${name}님 초대 코드를 새로 만들었어요. 예전 코드는 이제 쓸 수 없어요.`,
     shareAgain: '보내기',
     send: '이 그룹에 사진 보내기',
+    leave: '그룹 나가기',
+    memberLabel: (name: string) => `${name}, 누르면 내보내기`,
+    removeTitle: (name: string) => `${name}님을 내보낼까요?`,
+    removeText: '이 그룹 사진을 더 볼 수 없어요. 올린 사진은 가족 앨범에 남아요.',
+    removeConfirm: '내보내기',
+    removed: (name: string) => `${name}님을 내보냈어요`,
+  },
+  // 그룹 나가기 (F-LMXBXX)
+  leave: {
+    title: (group: string) => (group ? `${group}에서\n나갈까요?` : '이 그룹에서\n나갈까요?'),
+    noAccess: '이 그룹 사진을 더 볼 수 없어요',
+    photosStay: '내가 올린 사진은 가족 앨범에 남아요',
+    adminNote: '내가 마지막 관리자라면 가장 먼저 들어온 가족이 관리자가 돼요',
+    deleteMine: '내가 이 그룹에 올린 사진도 지우기',
+    deleteMineHint: '다른 그룹에도 보낸 사진은 그 그룹에는 남아요',
+    submit: '나가기',
+    submitDelete: '사진 지우고 나가기',
   },
   // 묶음으로 보내기 (F-AXZNWA)
   send: {
@@ -364,6 +387,8 @@ export const ko = {
     forbidden: '관리자만 할 수 있어요',
     alreadyUsed: '이미 들어온 초대예요',
     alreadyRevoked: '이미 새 코드로 바뀐 초대예요. 목록을 새로 불러올게요',
+    notMember: '이미 이 그룹에 없는 사람이에요. 목록을 새로 불러올게요',
+    useLeave: "나 자신은 '그룹 나가기'로 나갈 수 있어요",
     unknown: '잠시 문제가 생겼어요. 다시 시도해 주세요',
     loadFailed: '불러오지 못했어요',
   },
