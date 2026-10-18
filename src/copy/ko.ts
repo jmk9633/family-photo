@@ -252,6 +252,7 @@ export const ko = {
       savedText: '지금은 인터넷이 잘 안 돼서 보내지 못했어요.\n앱을 다시 열면 저절로 보내요',
       failed: '보내지 못했어요',
       failedText: '이 사진은 보낼 수 없어요. 다시 찍어 주세요',
+      failedVideoText: '이 영상은 보낼 수 없어요. 다시 찍어 주세요',
       cameraNeeded: '사진을 찍으려면\n카메라를 허용해 주세요',
       allowCamera: '카메라 허용하기',
       openSettings: '설정 열기',

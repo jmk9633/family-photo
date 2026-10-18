@@ -130,32 +130,33 @@ export default function EasyCamera() {
   async function send() {
     if (!captured || !me) return;
     setPhase('sending');
-    let job: ReturnType<typeof newSendJob> | null = null;
+    const postKind = isVideo ? 'video_message' : 'normal';
+    // 묶음·사진 ID는 먼저 정해 둔다 (인터넷이 없어 그룹 목록을 못 읽어도 같은 ID로 나중에 보낸다)
+    let job = newSendJob({ userId: me, items: [captured], title: null, tags: [], groupIds: [], kind: postKind });
     try {
-      const groups = await listMyGroups(me);
-      if (groups.length === 0) throw new SendError('forbidden', null, new Error('no_groups'));
-      job = newSendJob({
-        userId: me,
-        items: [captured],
-        title: null,
-        tags: [],
-        groupIds: groups.map((g) => g.id),
-        kind: isVideo ? 'video_message' : 'normal',
-      });
+      let groupIds: string[];
+      try {
+        groupIds = (await listMyGroups(me)).map((g) => g.id);
+      } catch (e) {
+        // 인터넷이 없으면 그룹 목록부터 못 읽는다 → 보관하고 나중에 그때의 모든 그룹으로 보낸다
+        throw new SendError('network', null, e);
+      }
+      if (groupIds.length === 0) throw new SendError('forbidden', null, new Error('no_groups'));
+      job = { ...job, groupIds };
       await runSendJob(job, () => {});
       setPhase('sent');
     } catch (e) {
       if (__DEV__) console.warn('[easy send failed]', e);
       const permanent = e instanceof SendError && isPermanent(e.kind);
-      if (!permanent && job) {
+      if (!permanent) {
         // 인터넷 문제 등: 폰에 보관해 두고 앱을 열 때 다시 보낸다
         try {
           await saveToOutbox(me, {
             postId: job.postId,
             mediaId: job.mediaIds[0],
-            kind: isVideo ? 'video_message' : 'normal',
+            kind: postKind,
             item: captured,
-            groupIds: job.groupIds,
+            groupIds: job.groupIds, // 비어 있으면 다시 보낼 때 그때의 모든 그룹으로
           });
           setPhase('saved');
           return;
@@ -186,7 +187,7 @@ export default function EasyCamera() {
           {phase === 'sent' ? c.sent : phase === 'saved' ? c.saved : c.failed}
         </Text>
         <Text style={styles.lightText}>
-          {phase === 'sent' ? c.sentText : phase === 'saved' ? c.savedText : c.failedText}
+          {phase === 'sent' ? c.sentText : phase === 'saved' ? c.savedText : isVideo ? c.failedVideoText : c.failedText}
         </Text>
         <View style={styles.lightButtons}>
           {phase === 'failed' ? <BigButton variant="outline" label={c.retake} onPress={retake} /> : null}

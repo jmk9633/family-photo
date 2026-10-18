@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Directory, File, Paths } from 'expo-file-system';
 
+import { listMyGroups } from '@/features/groups/api';
+
 import { newSendJob, runSendJob, type PickedMedia, type PostKind } from './send';
 
 // 쉬운 화면 '나중에 다시 보낼게요' (F-BBQGEJ·F-TFIFCO, 6-2 결정 5).
@@ -13,7 +15,7 @@ type OutboxEntry = {
   mediaId: string;
   kind: PostKind;
   item: PickedMedia; // uri는 문서 폴더의 사본
-  groupIds: string[];
+  groupIds: string[]; // 비어 있으면(보낼 때 그룹 목록도 못 읽음) 다시 보낼 때의 모든 그룹
   savedAt: string;
 };
 
@@ -64,10 +66,12 @@ export async function retryOutbox(userId: string): Promise<number> {
     for (const e of list) {
       const file = new File(e.item.uri);
       if (!file.exists) continue; // 파일이 없어졌으면 보낼 수 없다
-      const job = newSendJob({ userId, items: [e.item], title: null, tags: [], groupIds: e.groupIds, kind: e.kind });
-      job.postId = e.postId;
-      job.mediaIds = [e.mediaId];
       try {
+        const groupIds = e.groupIds.length > 0 ? e.groupIds : (await listMyGroups(userId)).map((g) => g.id);
+        if (groupIds.length === 0) throw new Error('no_groups');
+        const job = newSendJob({ userId, items: [e.item], title: null, tags: [], groupIds, kind: e.kind });
+        job.postId = e.postId;
+        job.mediaIds = [e.mediaId];
         await runSendJob(job, () => {});
         sent++;
         try {
