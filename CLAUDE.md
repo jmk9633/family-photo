@@ -93,7 +93,7 @@ supabase/tests      RLS 테스트 (pgTAP)
 | 쉬운 모드 자동 넘김 | 폰은 '쭉 보기'를 눌렀을 때만, 8초. TV는 자동 8초 | 앱 |
 | '봤어요' | 묶음에서 한 장이라도 보면 기록 | 앱 → `post_views` |
 | 하트 알림 | 묶음별로 모아 한 번 | Edge Function |
-| 밤 알림 | 쉬운 모드 사용자에게 21시~8시 새 묶음 알림은 모아서 8시에 한 번 | Edge Function |
+| 밤 알림 | 쉬운 모드 사용자에게 21시~8시(KST) 가는 알림은 종류와 상관없이 모아서 8시에 한 번. 한 가지 소식이면 그 내용, 여러 가지면 '새 사진과 가족 소식이 있어요. 눌러서 보세요'(새 사진 없으면 '가족 소식이 있어요…'). 이미 본 새 사진은 뺀다 | notify → `night_queue`, pg_cron 23:00 UTC → `send_night_digest()`(pg_net으로 Expo) (0009) |
 | 안부 기간 | 2·3·5·7일 (기본 3일) | `groups.wellbeing_days` 검사 |
 | 안부 판단 | 매일 10:00 KST, 알림은 관리자만 | `run_wellbeing_check` (pg_cron) |
 | 안부 다시 켜기 | 관리자는 요청만, 본인이 '좋아요'를 눌러야 켜짐 | `request_wellbeing`, 트리거 `consent_required` |

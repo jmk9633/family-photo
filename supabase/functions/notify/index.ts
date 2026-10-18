@@ -13,7 +13,10 @@
 //             ({ type, groupId }, 이전 한 건당 한 번 — admin_transfer_log 0007, F-LMXBXX)
 //
 // 이름은 받는 사람이 보는 그룹에서의 이름 (그 묶음을 받은 그룹 중 받는 사람이 먼저 들어간 그룹).
-// 쉬운 모드 사용자의 밤(21~8시) 알림 모으기는 6단계에서 쉬운 모드를 붙일 때 더한다.
+//
+// 밤 알림 모으기 (6-3, 0009): 밤 9시~아침 8시(한국 시간)에는 쉬운 화면 사용자에게 가는 알림을 종류와 상관없이
+// 보내지 않고 night_queue에 넣는다. 아침 8시에 pg_cron이 send_night_digest()로 한 사람당 하나로 묶어 보낸다.
+// 시험할 때는 `npx supabase secrets set NOTIFY_FORCE_NIGHT=1`로 낮에도 밤처럼 모은다 (끝나면 unset).
 //
 // 배포: npx supabase functions deploy notify  (JWT 확인은 기본값 그대로 켜 둔다)
 
@@ -22,6 +25,13 @@ import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.1
 type Kind = 'new_post' | 'heart' | 'seen';
 const KINDS: Kind[] = ['new_post', 'heart', 'seen'];
 const JOIN_FRESH_MS = 10 * 60 * 1000;
+
+/** 한국 시간 밤 9시~아침 8시인가 (시험용 NOTIFY_FORCE_NIGHT=1이면 항상 밤) */
+function isNightKst(): boolean {
+  if (Deno.env.get('NOTIFY_FORCE_NIGHT') === '1') return true;
+  const hour = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCHours();
+  return hour >= 21 || hour < 8;
+}
 const NOT_DAILY = '1970-01-01';
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
@@ -218,7 +228,7 @@ async function deliver(
     return { title: copy.seen.title, body: copy.seen.body(name) };
   };
 
-  return await pushTo(admin, recipients, text, { postId: post.id, kind });
+  return await pushTo(admin, recipients, text, { postId: post.id, kind }, nameFor);
 }
 
 /** 받는 사람들의 활성 기기로 보낸다. 보낸 수를 돌려준다. */
@@ -227,7 +237,27 @@ async function pushTo(
   recipients: string[],
   text: (recipient: string) => { title: string; body: string },
   data: Record<string, string>,
+  actorName?: (recipient: string) => string,
 ): Promise<number> {
+  // 밤이면 쉬운 화면 사용자 몫은 아침 알림으로 모은다
+  if (isNightKst() && recipients.length > 0) {
+    const { data: easy } = await admin.from('profiles').select('id').in('id', recipients).eq('easy_mode', true);
+    const easyIds = new Set(((easy ?? []) as { id: string }[]).map((p) => p.id));
+    if (easyIds.size > 0) {
+      const rows = [...easyIds].map((r) => ({
+        user_id: r,
+        kind: data.kind,
+        post_id: data.postId ?? null,
+        group_id: data.groupId ?? null,
+        actor_name: actorName ? actorName(r) : null,
+        ...text(r),
+      }));
+      const { error } = await admin.from('night_queue').insert(rows);
+      if (error) throw error;
+      recipients = recipients.filter((r) => !easyIds.has(r));
+      if (recipients.length === 0) return 0;
+    }
+  }
   // 기기: 활성 + 토큰 있음. 같은 토큰이 여러 계정에 남아 있으면 가장 최근에 쓴 계정에게만 보낸다
   const { data: deviceRows } = await admin
     .from('devices')
@@ -310,6 +340,7 @@ async function handleJoined(admin: SupabaseClient, me: string, groupId: string):
       recipients,
       () => ({ title: copy.joined.title, body: copy.joined.body(name, group.name) }),
       { groupId, kind: 'joined' },
+      () => name,
     );
     return json(200, { sent });
   } catch (e) {
@@ -364,6 +395,7 @@ async function handleAdminChanged(admin: SupabaseClient, me: string, groupId: st
             ? { title: copy.adminMe.title, body: copy.adminMe.body(groupName) }
             : { title: copy.adminOthers.title, body: copy.adminOthers.body(name, groupName) },
         { groupId, kind: 'admin_changed' },
+        () => name,
       );
     } catch (e) {
       await admin.from('admin_transfer_log').update({ notified_at: null }).eq('id', log.id);
