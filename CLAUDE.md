@@ -171,6 +171,8 @@ eas build --profile preview         # 기기 테스트용 빌드
   배포: `npx supabase functions deploy notify`. 함수는 앱 tsc에서 빼 두었다(tsconfig exclude, Deno로 검사).
 - 카카오·구글 로그인 복귀 주소는 `familyphoto://auth/callback` 고정 (Supabase가 IP 주소 복귀를 거부하므로 Expo Go 기본 주소를 쓰지 않는다).
   Android Expo Go에서는 이 방식이 동작하지 않으므로 Android는 개발 빌드부터 테스트한다.
+  안드로이드는 이 복귀 주소가 Expo Router 화면 이동에도 전달되어 로그인 직후 빈 화면이 생겼다. `src/app/+native-intent.tsx`가 auth/callback 주소의 화면 이동을 막는다 (10/20).
+  브라우저 방식이라 카카오 콘솔 안드로이드 플랫폼(키 해시)·구글 Android OAuth 클라이언트(SHA-1) 등록은 필요 없다. 네이티브 SDK로 바꿀 때만 등록한다.
 - Supabase 카카오는 이메일 동의항목을 항상 요청한다. 카카오 앱은 비즈 앱(개인 개발자)으로 전환하고 이메일은 '선택 동의'로 둔다.
 
 - 4단계부터 앱 테스트는 개발 빌드(아이폰에 설치한 '가족 사진' 앱 + `npx expo start`)로 한다. Expo Go에 들어 있는 예전 expo-image-manipulator는
