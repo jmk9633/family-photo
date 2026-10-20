@@ -95,7 +95,8 @@ supabase/tests      RLS 테스트 (pgTAP)
 | 하트 알림 | 묶음별로 모아 한 번 | Edge Function |
 | 밤 알림 | 쉬운 모드 사용자에게 21시~8시(KST) 가는 알림은 종류와 상관없이 모아서 8시에 한 번. 한 가지 소식이면 그 내용, 여러 가지면 '새 사진과 가족 소식이 있어요. 눌러서 보세요'(새 사진 없으면 '가족 소식이 있어요…'). 이미 본 새 사진은 뺀다 | notify → `night_queue`, pg_cron 23:00 UTC → `send_night_digest()`(pg_net으로 Expo) (0009) |
 | 안부 기간 | 2·3·5·7일 (기본 3일) | `groups.wellbeing_days` 검사 |
-| 안부 판단 | 매일 10:00 KST, 알림은 관리자만 | `run_wellbeing_check` (pg_cron) |
+| 안부 판단 | 매일 10:00 KST, 알림은 관리자만(대상자 본인 제외). 같은 무활동 구간에 한 번, '괜찮아요' 뒤 기간 안에는 다시 안 만듦. 대상자가 활동하면 닫힘, 새 묶음이 오면 넛지 닫힘 | pg_cron `wellbeing-daily` 01:00 UTC → `wellbeing_daily()` = `run_wellbeing_check` + `send_wellbeing_pushes`(pg_net으로 Expo) (0010) |
+| 구성원 전화번호 | 관리자가 넣고 관리자만 봄(선택). 숫자만 저장, 안부 '전화하기'에 씀 | `member_phones` RLS, `set_member_phone` → `invalid_phone` (0010) |
 | 안부 다시 켜기 | 관리자는 요청만, 본인이 '좋아요'를 눌러야 켜짐 | `request_wellbeing`, 트리거 `consent_required` |
 | 주간 모음 제안 | 일요일 20:00 로컬 알림, 최대 10장 | 앱 |
 | 사진 보존 | 기간 제한 없음 | — |
@@ -151,8 +152,8 @@ eas build --profile preview         # 기기 테스트용 빌드
 3. 보내기 — 사진 (완료)
 4. 보기 + 영상 보내기 (완료)
 5. 반응(하트)·'봤어요' + 애플 로그인 우회 제거 + 푸시 알림 (완료)
-6. 쉬운 모드 연결 ← 지금 (6-1 연결·보기 / 6-2 영상 한마디·사진 찍어 보내기 / 6-3 밤 알림 모으기)
-7. 안부 확인 (MVP)
+6. 쉬운 모드 연결 (완료)
+7. 안부 확인 (MVP) ← 지금 (7-1 알림·응답 완료 / 7-2 켜고 끄기·동의 / 7-3 정리 작업)
 8. 홈 화면 위젯 (iOS부터)
 9. TV 앱 (삼성 Tizen부터)
 
