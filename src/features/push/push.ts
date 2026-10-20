@@ -121,7 +121,7 @@ export async function unregisterPush(userId: string): Promise<void> {
 }
 
 /**
- * 알림을 누르면: 서버가 넣어 둔 postId가 있으면 그 묶음을 크게 연다.
+ * 알림을 누르면: 서버가 넣어 둔 postId가 있으면 그 묶음을 크게 연다. 안부 알림은 안부 띠·보내기 화면으로.
  * 일반 모드는 사진 상세, 쉬운 화면은 한 장씩 보기 (6단계).
  */
 export function openFromNotification(
@@ -129,6 +129,16 @@ export function openFromNotification(
   mode: 'general' | 'easy',
 ) {
   const data = response?.notification.request.content.data;
+  // 안부 알림(7-1): 안부 알림은 사진 탭(맨 위 안부 띠), 넛지는 그 그룹 보내기 화면. 쉬운 화면은 홈에 그대로.
+  if (data?.kind === 'wellbeing') {
+    if (mode !== 'general') return;
+    if (data.alertKind === 'nudge' && typeof data.groupId === 'string') {
+      router.push({ pathname: '/send', params: { group: data.groupId } });
+    } else {
+      router.navigate('/');
+    }
+    return;
+  }
   const postId = data?.postId;
   const groupId = data?.groupId;
   if (typeof postId === 'string' && postId) {

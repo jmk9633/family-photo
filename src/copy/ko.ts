@@ -345,11 +345,39 @@ export const ko = {
     shareAgain: '보내기',
     send: '이 그룹에 사진 보내기',
     leave: '그룹 나가기',
-    memberLabel: (name: string) => `${name}, 누르면 내보내기`,
     removeTitle: (name: string) => `${name}님을 내보낼까요?`,
     removeText: '이 그룹 사진을 더 볼 수 없어요. 올린 사진은 가족 앨범에 남아요.',
     removeConfirm: '내보내기',
     removed: (name: string) => `${name}님을 내보냈어요`,
+    // 구성원을 누르면 (관리자) — 7-1
+    phoneAction: '전화번호',
+    memberLabelAdmin: (name: string) => `${name}, 누르면 전화번호·내보내기`,
+    memberLabelSelf: (name: string) => `${name}, 누르면 전화번호`,
+  },
+  // 구성원 전화번호 (관리자만, 안부 알림의 '전화하기'에 씀) — 7-1
+  memberPhone: {
+    title: (name: string) => `${name}님 전화번호`,
+    label: '전화번호',
+    placeholder: '010-1234-5678',
+    hint: "안부 알림에서 '전화하기'를 누르면 이 번호로 전화해요. 관리자만 볼 수 있어요.",
+    remove: '번호 지우기',
+    saved: '저장했어요',
+  },
+  // 안부 알림 띠 (사진 탭 맨 위, 관리자만) — F-QEMORX, 7-1
+  wellbeing: {
+    checkTitle: (name: string, days: number) => `${iga(name)} ${days}일째 새 사진을 안 보셨어요`,
+    checkText: '안부 전화 드려볼까요?',
+    notEmergency: '응급 상황 알림이 아니에요. 앱 사용 기록을 바탕으로 한 안부 알림이에요.',
+    call: '전화하기',
+    ok: '괜찮아요',
+    noPhone: "전화번호를 넣어 두면 여기서 바로 전화할 수 있어요",
+    addPhone: '전화번호 넣기',
+    nudgeTitle: '요즘 보낸 사진이 없어요',
+    nudgeText: (name: string) => `${name}에게 새 사진을 보내 드려 볼까요?`,
+    send: '사진 보내기',
+    close: '닫기',
+    failed: '처리하지 못했어요. 다시 시도해 주세요',
+    callFailed: '이 기기에서는 전화를 걸 수 없어요',
   },
   // 그룹 나가기 (F-LMXBXX)
   leave: {
@@ -428,6 +456,7 @@ export const ko = {
     useLeave: "나 자신은 '그룹 나가기'로 나갈 수 있어요",
     unknown: '잠시 문제가 생겼어요. 다시 시도해 주세요',
     loadFailed: '불러오지 못했어요',
+    invalidPhone: '전화번호를 다시 확인해 주세요 (예: 010-1234-5678)',
   },
   providers: {
     kakao: '카카오',

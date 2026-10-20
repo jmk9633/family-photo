@@ -26,10 +26,11 @@ import {
   NAME_MAX,
   toGroupErrorMessage,
 } from '@/features/groups/format';
+import { formatPhone, listMemberPhones } from '@/features/wellbeing/api';
 
 // 그룹 화면: 구성원과 태그, 내 이름 바꾸기, 관리자의 초대하기·보낸 초대 목록,
-// 관리자의 구성원 내보내기(구성원을 누르면 확인 창), 맨 아래 그룹 나가기 (F-LMXBXX, 6단계).
-// 연결된 기기·안부 확인·합치기는 각 단계에서 추가한다.
+// 관리자가 구성원을 누르면 전화번호(7-1, 안부 알림 '전화하기'용)·내보내기(F-LMXBXX), 맨 아래 그룹 나가기 (6단계).
+// 전화번호는 관리자에게만 보인다 (member_phones, 0010). 연결된 기기·안부 확인 설정·합치기는 각 단계에서 추가한다.
 export default function GroupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { session } = useSession();
@@ -38,6 +39,7 @@ export default function GroupScreen() {
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
+  const [phones, setPhones] = useState<Record<string, string>>({});
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -53,11 +55,12 @@ export default function GroupScreen() {
 
   const load = useCallback(() => {
     setFailed(false);
-    Promise.all([getGroup(id), listMembers(id), listOpenInvites(id)])
-      .then(([g, m, inv]) => {
+    Promise.all([getGroup(id), listMembers(id), listOpenInvites(id), listMemberPhones(id).catch(() => ({}))])
+      .then(([g, m, inv, ph]) => {
         setGroup(g);
         setMembers(m);
         setInvites(inv);
+        setPhones(ph);
         setLoaded(true);
       })
       .catch(() => setFailed(true));
@@ -93,6 +96,26 @@ export default function GroupScreen() {
       setReissuing(null);
       load();
     }
+  }
+
+  function openPhone(m: Member) {
+    router.push({
+      pathname: '/group/[id]/phone',
+      params: { id, member: m.id, name: m.display_name || ko.feed.unknownSender },
+    });
+  }
+
+  // 관리자가 구성원을 누르면: 나 → 전화번호, 다른 사람 → 전화번호·내보내기 고르기
+  function memberActions(m: Member) {
+    if (m.user_id === myId) {
+      openPhone(m);
+      return;
+    }
+    Alert.alert(m.display_name || ko.feed.unknownSender, undefined, [
+      { text: ko.group.phoneAction, onPress: () => openPhone(m) },
+      { text: ko.group.removeConfirm, style: 'destructive', onPress: () => confirmRemove(m) },
+      { text: ko.common.cancel, style: 'cancel' },
+    ]);
   }
 
   function confirmRemove(m: Member) {
@@ -188,14 +211,18 @@ export default function GroupScreen() {
           <Text style={styles.sectionTitle}>{ko.group.members(members.length)}</Text>
           <View style={styles.card}>
             {members.map((m, i) => {
-              const canRemove = isAdmin && m.user_id !== myId;
+              const isMe = m.user_id === myId;
+              const label = m.display_name || ko.feed.unknownSender;
+              const phone = phones[m.id];
               return (
                 <Pressable
                   key={m.id}
-                  disabled={!canRemove}
-                  accessibilityRole={canRemove ? 'button' : undefined}
-                  accessibilityLabel={canRemove ? ko.group.memberLabel(m.display_name || ko.feed.unknownSender) : undefined}
-                  onPress={() => confirmRemove(m)}
+                  disabled={!isAdmin}
+                  accessibilityRole={isAdmin ? 'button' : undefined}
+                  accessibilityLabel={
+                    isAdmin ? (isMe ? ko.group.memberLabelSelf(label) : ko.group.memberLabelAdmin(label)) : undefined
+                  }
+                  onPress={() => memberActions(m)}
                   style={({ pressed }) => [styles.row, i > 0 && styles.rowDivider, pressed && styles.pressed]}
                 >
                   <View style={styles.memberTop}>
@@ -203,8 +230,9 @@ export default function GroupScreen() {
                       {m.display_name || '—'}
                       {m.user_id === myId ? <Text style={styles.muted}> {ko.group.me}</Text> : null}
                     </Text>
-                    {canRemove ? <Text style={styles.more}>⋯</Text> : null}
+                    {isAdmin ? <Text style={styles.more}>⋯</Text> : null}
                   </View>
+                  {phone ? <Text style={styles.muted}>{formatPhone(phone)}</Text> : null}
                   <View style={styles.tagRow}>
                     {m.is_admin ? <Tag label={ko.group.tags.admin} strong /> : null}
                     {m.easy_mode ? <Tag label={ko.group.tags.easy} /> : null}
