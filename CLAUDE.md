@@ -153,7 +153,7 @@ npx expo start                      # 개발 서버 (아이폰의 '가족 사진
 npx expo install <패키지>            # 패키지 추가
 npx tsc --noEmit                    # 타입 검사
 npx expo run:ios --device           # 개발 빌드를 아이폰에 설치 (네이티브 라이브러리 추가 시, 무료 계정은 7일마다)
-npx supabase db push                # 마이그레이션을 원격 DB에 적용 (2단계부터)
+npx supabase db push --linked       # 마이그레이션을 원격 DB에 적용 (CLI가 곧 기본값을 로컬로 바꾼다고 경고해서 --linked를 붙인다)
 npx supabase test db                # RLS 테스트 (Docker 필요. 없으면 Claude가 클라우드에서 검증)
 eas build --profile preview         # 기기 테스트용 빌드
 ```
@@ -165,7 +165,7 @@ eas build --profile preview         # 기기 테스트용 빌드
 4. 보기 + 영상 보내기 (완료)
 5. 반응(하트)·'봤어요' + 애플 로그인 우회 제거 + 푸시 알림 (완료)
 6. 쉬운 모드 연결 (완료)
-7. 안부 확인 (MVP) ← 지금 (7-1 알림·응답 완료 / 7-2 켜고 끄기·동의 완료 / 7-3 새벽 정리 작업 완료 / 7-4 사진 지우기·관리자 내리기·내보낼 때 사진 확인 중)
+7. 안부 확인 (MVP, 완료 10/25: 7-1 알림·응답 / 7-2 켜고 끄기·동의 / 7-3 새벽 정리 작업 / 7-4 사진 지우기·관리자 내리기·내보낼 때 사진)
 8. 홈 화면 위젯 (iOS부터)
 9. TV 앱 (삼성 Tizen부터)
 
