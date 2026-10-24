@@ -122,6 +122,13 @@ export const ko = {
     deleteText: '보낸 모든 가족 앨범에서 사라지고 되돌릴 수 없어요.',
     deleteConfirm: '지우기',
     deleteFailed: '지우지 못했어요. 다시 시도해 주세요',
+    // 관리자가 남의 사진 내리기 (7-4, F-LMXBXX)
+    takeDown: '가족 앨범에서 내리기',
+    takeDownTitle: '이 사진을 가족 앨범에서 내릴까요?',
+    takeDownText: (name: string) =>
+      `${iga(name)} 보낸 사진이에요. 내가 관리하는 가족 앨범에서 사라지고 되돌릴 수 없어요. ${name}에게는 알리지 않아요.`,
+    takeDownConfirm: '내리기',
+    takeDownFailed: '내리지 못했어요. 다시 시도해 주세요',
   },
   // 앨범 탭 (F-HEETWR)
   album: {
@@ -215,6 +222,14 @@ export const ko = {
       moreNew: '새 사진이 또 있어요',
       nextSub: (name: string, n: number) => `${iga(name)} 보냄 · ${n}장`,
       nextPost: '다음 사진 보기',
+      // 내가 보낸 사진 지우기 (7-4)
+      deleteMine: (n: number) => (n > 1 ? `보낸 사진 ${n}장 지우기` : '이 사진 지우기'),
+      deleteAsk: (n: number) => (n > 1 ? `보낸 사진 ${n}장을 지울까요?` : '이 사진을 지울까요?'),
+      deleteAskText: '가족 모두에게서 지워져요.\n지운 사진은 되돌릴 수 없어요.',
+      deleteYes: '지우기',
+      deleteNo: '그대로 두기',
+      deleted: '지웠어요',
+      deleteFailed: '지우지 못했어요. 다시 해 볼까요?',
     },
     past: {
       title: '지난 사진',
@@ -346,9 +361,15 @@ export const ko = {
     send: '이 그룹에 사진 보내기',
     leave: '그룹 나가기',
     removeTitle: (name: string) => `${name}님을 내보낼까요?`,
-    removeText: '이 그룹 사진을 더 볼 수 없어요. 올린 사진은 가족 앨범에 남아요.',
+    removeText: '이 그룹 사진을 더 볼 수 없어요.',
     removeConfirm: '내보내기',
     removed: (name: string) => `${name}님을 내보냈어요`,
+    // 내보낼 때 그 사람 사진 (7-4): 기본은 남기기
+    removePhotosTitle: (name: string) => `${name}님이 올린 사진은 어떻게 할까요?`,
+    removePhotosText: '지우면 이 그룹 앨범에서 사라지고 되돌릴 수 없어요. 다른 가족에게도 보낸 사진은 그 가족에게는 남아요.',
+    removeKeepPhotos: '사진은 남기기',
+    removeDeletePhotos: '사진도 지우기',
+    removedWithPhotos: (name: string) => `${name}님을 내보내고 올린 사진을 지웠어요`,
     // 구성원을 누르면 (관리자) — 7-1
     phoneAction: '전화번호',
     memberLabelAdmin: (name: string) => `${name}, 누르면 전화번호·안부 확인·내보내기`,

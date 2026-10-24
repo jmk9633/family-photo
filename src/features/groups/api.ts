@@ -159,9 +159,12 @@ export async function getLeaveWarning(groupId: string): Promise<{ noManager: boo
   return { noManager: !!(data as { no_manager?: boolean } | null)?.no_manager };
 }
 
-/** 관리자가 다른 구성원을 내보낸다 (0007). 올린 사진은 남는다. */
-export async function removeMember(memberId: string): Promise<void> {
-  const { error } = await supabase.rpc('remove_member', { p_member: memberId });
+/**
+ * 관리자가 다른 구성원을 내보낸다 (0007·0013). 기본은 올린 사진을 남긴다.
+ * deletePosts면 그 사람이 이 그룹에만 보낸 사진은 지우고(새벽 정리가 파일까지), 다른 가족에도 보낸 사진은 이 그룹에서만 뺀다.
+ */
+export async function removeMember(memberId: string, deletePosts = false): Promise<void> {
+  const { error } = await supabase.rpc('remove_member', { p_member: memberId, p_delete_posts: deletePosts });
   if (error) throw error;
 }
 

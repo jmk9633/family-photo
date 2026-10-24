@@ -226,22 +226,29 @@ export default function GroupScreen() {
     const name = m.display_name || ko.feed.unknownSender;
     Alert.alert(ko.group.removeTitle(name), ko.group.removeText, [
       { text: ko.common.cancel, style: 'cancel' },
-      {
-        text: ko.group.removeConfirm,
-        style: 'destructive',
-        onPress: async () => {
-          setNotice(null);
-          try {
-            await removeMember(m.id);
-            setNotice(ko.group.removed(name));
-          } catch (e) {
-            setNotice(toGroupErrorMessage(e));
-          } finally {
-            load();
-          }
-        },
-      },
+      { text: ko.group.removeConfirm, style: 'destructive', onPress: () => askRemovePhotos(m, name) },
     ]);
+  }
+
+  // 내보낼 때 그 사람 사진 (7-4, F-LMXBXX): 기본(굵게)은 '사진은 남기기'. 지우면 되돌릴 수 없다.
+  function askRemovePhotos(m: Member, name: string) {
+    Alert.alert(ko.group.removePhotosTitle(name), ko.group.removePhotosText, [
+      { text: ko.common.cancel, style: 'cancel' },
+      { text: ko.group.removeDeletePhotos, style: 'destructive', onPress: () => doRemove(m, name, true) },
+      { text: ko.group.removeKeepPhotos, isPreferred: true, onPress: () => doRemove(m, name, false) },
+    ]);
+  }
+
+  async function doRemove(m: Member, name: string, deletePosts: boolean) {
+    setNotice(null);
+    try {
+      await removeMember(m.id, deletePosts);
+      setNotice(deletePosts ? ko.group.removedWithPhotos(name) : ko.group.removed(name));
+    } catch (e) {
+      setNotice(toGroupErrorMessage(e));
+    } finally {
+      load();
+    }
   }
 
   async function share(invite: Invite) {

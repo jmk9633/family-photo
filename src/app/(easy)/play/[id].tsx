@@ -18,6 +18,7 @@ import { listMyGroups } from '@/features/groups/api';
 import { getPost, listNameBook, senderName, type FeedMedia, type FeedPost, type NameBook } from '@/features/posts/feed';
 import { formatDay, titleOf } from '@/features/posts/format';
 import { addHeart, listHearts, removeHeart, type HeartBook } from '@/features/posts/reactions';
+import { deleteMyPost } from '@/features/posts/remove';
 import { loadEasyFeed } from '@/features/posts/unseen';
 import { recordView } from '@/features/posts/views';
 import { signedSource, signedUrl, signPaths } from '@/lib/signedUrl';
@@ -30,8 +31,11 @@ import { signedSource, signedUrl, signPaths } from '@/lib/signedUrl';
 // - 마지막 장 다음은 '다 봤어요'. 아직 안 본 새 묶음이 더 있으면 그 묶음과 '다음 사진 보기' (10/18 결정 6).
 // - 첫 장이 보이면 '봤어요'를 기록한다 (내가 보낸 묶음은 빼고, 10/18 결정 7).
 // - 좋아요 = 하트 (F-CPRPRW). 다시 누르면 취소, 누르면 'OO에게 보냈어요'를 2초 보여준다.
+// - 내가 보낸 사진이면 아래에 '이 사진 지우기' (7-4). 누르면 한 화면을 통째로 써서 한 번 더 묻고
+//   ('그대로 두기'가 위·강조), 지우면 '지웠어요'를 2초 보여준 뒤 처음으로 간다. 남의 사진에는 안 보인다.
 
 const AUTO_MS = 8000;
+const DELETED_MS = 2000;
 const KEEP_AWAKE_TAG = 'easy-play';
 
 export default function EasyPlay() {
@@ -48,6 +52,8 @@ export default function EasyPlay() {
   const [auto, setAuto] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 내 사진 지우기: null(평소) → ask(묻기) → busy → deleted(2초 뒤 처음으로) / failed(다시 묻기 화면)
+  const [deleting, setDeleting] = useState<'ask' | 'busy' | 'failed' | 'deleted' | null>(null);
 
   const load = useCallback(async () => {
     setFailed(false);
@@ -168,6 +174,27 @@ export default function EasyPlay() {
     );
   }
 
+  if (deleting) {
+    return (
+      <DeleteMine
+        count={total}
+        state={deleting}
+        onKeep={() => setDeleting(null)}
+        onDelete={async () => {
+          setAuto(false);
+          setDeleting('busy');
+          try {
+            await deleteMyPost(post.id);
+            setDeleting('deleted');
+          } catch (e) {
+            if (__DEV__) console.warn('[easy delete failed]', e);
+            setDeleting('failed');
+          }
+        }}
+      />
+    );
+  }
+
   if (done) return <Done post={post} me={me} sender={sender} />;
 
   return (
@@ -214,6 +241,18 @@ export default function EasyPlay() {
         {titleOf(post, sender) ? <Text style={styles.postTitle}>{titleOf(post, sender)}</Text> : null}
         <Text style={styles.meta}>{ko.easy.play.sentBy(sender, formatDay(post.createdAt))}</Text>
       </View>
+
+      {post.senderId === me ? (
+        <BigButton
+          variant="dark"
+          icon="trash-outline"
+          label={ko.easy.play.deleteMine(total)}
+          onPress={() => {
+            setAuto(false);
+            setDeleting('ask');
+          }}
+        />
+      ) : null}
 
       <BigButton
         variant="dark"
@@ -305,6 +344,60 @@ function EasyVideo({
     );
   }
   return <VideoView player={player} style={styles.photo} contentFit="contain" nativeControls />;
+}
+
+/** 내 사진 지우기: 한 번 더 묻는 화면 → 지웠어요 (2초 뒤 처음으로) */
+function DeleteMine({
+  count,
+  state,
+  onKeep,
+  onDelete,
+}: {
+  count: number;
+  state: 'ask' | 'busy' | 'failed' | 'deleted';
+  onKeep: () => void;
+  onDelete: () => void;
+}) {
+  useEffect(() => {
+    if (state !== 'deleted') return;
+    AccessibilityInfo.announceForAccessibility(ko.easy.play.deleted);
+    const t = setTimeout(() => router.dismissTo('/home'), DELETED_MS);
+    return () => clearTimeout(t);
+  }, [state]);
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar style="light" />
+      <HomeButton dark />
+      {state === 'deleted' ? (
+        <View style={styles.doneHead}>
+          <Text style={styles.doneTitle} accessibilityRole="header">
+            {ko.easy.play.deleted}
+          </Text>
+        </View>
+      ) : (
+        <>
+          <View style={styles.doneHead}>
+            <Text style={styles.doneTitle} accessibilityRole="header">
+              {state === 'failed' ? ko.easy.play.deleteFailed : ko.easy.play.deleteAsk(count)}
+            </Text>
+            <Text style={styles.doneSub}>{ko.easy.play.deleteAskText}</Text>
+          </View>
+          <View style={styles.askButtons}>
+            <BigButton large label={ko.easy.play.deleteNo} onPress={onKeep} disabled={state === 'busy'} />
+            <BigButton
+              large
+              variant="dark"
+              icon="trash-outline"
+              label={ko.easy.play.deleteYes}
+              onPress={onDelete}
+              loading={state === 'busy'}
+            />
+          </View>
+        </>
+      )}
+    </SafeAreaView>
+  );
 }
 
 /** 다 봤어요: 아직 안 본 새 묶음이 더 있으면 '다음 사진 보기' */
@@ -428,6 +521,7 @@ const styles = StyleSheet.create({
   doneTitle: { fontSize: 32, fontWeight: '700', color: easyColors.darkText },
   doneSub: { fontSize: easySize.bodyLarge, color: easyColors.darkTextSecondary },
   doneHome: { marginTop: 'auto' },
+  askButtons: { marginTop: 'auto', gap: 14 },
   nextCard: {
     marginTop: 'auto',
     gap: 12,

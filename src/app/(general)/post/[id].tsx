@@ -32,7 +32,7 @@ import {
 } from '@/features/posts/feed';
 import { formatDay, titleOf } from '@/features/posts/format';
 import { addHeart, listHearts, removeHeart, type HeartBook } from '@/features/posts/reactions';
-import { deleteMyPost } from '@/features/posts/remove';
+import { canTakeDown, deleteMyPost, takeDownPost } from '@/features/posts/remove';
 import { recordView } from '@/features/posts/views';
 import { signedSource, signPaths } from '@/lib/signedUrl';
 
@@ -69,6 +69,7 @@ function PostDetail() {
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [failed, setFailed] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [current, setCurrent] = useState(() => Math.max(0, Number(index ?? 0) || 0));
   const listRef = useRef<FlatList<FeedMedia>>(null);
 
@@ -95,6 +96,12 @@ function PostDetail() {
       .then(setBook)
       .catch(() => setBook(new Map()));
   }, [post]);
+
+  // 남이 보낸 사진이면 내가 관리자인 그룹이 있는지 ('가족 앨범에서 내리기', 7-4)
+  useEffect(() => {
+    if (!post || !me || post.senderId === me) return setIsAdmin(false);
+    canTakeDown(me, post.groupIds).then(setIsAdmin);
+  }, [post, me]);
 
   // '봤어요' 기록과 하트 목록
   useEffect(() => {
@@ -193,6 +200,27 @@ function PostDetail() {
     ]);
   }
 
+  // 관리자가 남이 보낸 사진 내리기 (7-4): 내가 관리하는 가족 앨범에서만 빠지고, 보낸 사람에게 알리지 않는다.
+  function confirmTakeDown() {
+    if (!post) return;
+    Alert.alert(ko.detail.takeDownTitle, ko.detail.takeDownText(sender ?? ko.feed.unknownSender), [
+      { text: ko.common.cancel, style: 'cancel' },
+      {
+        text: ko.detail.takeDownConfirm,
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await takeDownPost(post.id);
+            close();
+          } catch (e) {
+            if (__DEV__) console.warn('[post take down failed]', e);
+            showToast(ko.detail.takeDownFailed);
+          }
+        },
+      },
+    ]);
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
@@ -216,6 +244,16 @@ function PostDetail() {
             accessibilityRole="button"
             accessibilityLabel={ko.detail.delete}
             onPress={confirmDelete}
+            hitSlop={8}
+            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="trash-outline" size={26} color="#FFFFFF" />
+          </Pressable>
+        ) : post && isAdmin ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={ko.detail.takeDown}
+            onPress={confirmTakeDown}
             hitSlop={8}
             style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
           >
