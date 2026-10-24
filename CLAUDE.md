@@ -88,8 +88,12 @@ supabase/tests      RLS 테스트 (pgTAP)
 | 한 묶음 | 사진·영상 합쳐 30장 | `media` 트리거 `too_many_media` |
 | 영상·영상 한마디 | 최대 1분 | 앱: 고르기 버튼 아래 안내 + 고른 뒤 길이 검사로 빼고 알림, DB: `media.duration_sec` 검사 |
 | 서명 URL | 유효 1시간, 10분 남으면 새로 받음. 화면에는 `cacheKey = 저장 경로`로 넘김 | `src/lib/signedUrl.ts` |
-| 끝나지 않은 업로드 | 24시간 뒤 묶음과 파일 삭제 | Edge Function (예약) |
-| 지우는 중(deleting) 묶음 | 앱이 못 지운 것은 정리 작업이 묶음과 파일 삭제 | Edge Function (예약, 7단계) |
+| 새벽 정리 작업 | 매일 03:30 KST. 결과는 `cleanup_runs.result` | pg_cron `cleanup-daily` 18:30 UTC → `start_cleanup()` → pg_net → Edge Function `cleanup` (0012) |
+| 끝나지 않은 업로드 | 24시간 넘은 '올리는 중'은 'deleting'으로 바꾼 뒤 `posts/{묶음}/` 폴더째 파일 삭제 → 묶음 삭제 | `cleanup_take_posts` → `cleanup`, `cleanup_finish_posts` (0012) |
+| 지우는 중(deleting) 묶음 | 앱이 못 지운 것은 새벽 정리가 같은 방식으로 지움. 'deleting'은 앱이 다시 'ready'로 못 바꿈 | 트리거 `posts_deleting_final` → `post_deleting` (0012) |
+| 주인 없는 파일 | 묶음 기록 없이 24시간 지난 `posts/{id}/` 폴더는 새벽 정리가 지움 | `cleanup_orphan_folders` (0012) |
+| 연결 못 한 익명 계정 | 한 번도 가족에 연결되지 못한 채 7일 지나면 계정 삭제. 나갔거나 내보내진 익명은 지우지 않음(계정을 지우면 보낸 사진도 지워지므로). 지워진 폰에서 다시 숫자를 넣으면 새 익명 계정으로 바로 연결 | `cleanup_anonymous_targets` → `cleanup`, 앱 `ensureSignedIn` (0012, 10/25 결정) |
+| 오래된 기록 | 90일 지난 초대 기록(그 전에는 같은 숫자를 다시 발급하지 않음), 하루 지난 숫자 시도 기록, 30일 지난 정리 기록 | `start_cleanup` → `cleanup_old_records` (0001·0012) |
 | 쉬운 모드 자동 넘김 | 폰은 '쭉 보기'를 눌렀을 때만, 8초. TV는 자동 8초 | 앱 |
 | '봤어요' | 묶음에서 한 장이라도 보면 기록 | 앱 → `post_views` |
 | 하트 알림 | 묶음별로 모아 한 번 | Edge Function |
@@ -154,7 +158,7 @@ eas build --profile preview         # 기기 테스트용 빌드
 4. 보기 + 영상 보내기 (완료)
 5. 반응(하트)·'봤어요' + 애플 로그인 우회 제거 + 푸시 알림 (완료)
 6. 쉬운 모드 연결 (완료)
-7. 안부 확인 (MVP) ← 지금 (7-1 알림·응답 완료 / 7-2 켜고 끄기·동의 완료 / 7-3 정리 작업)
+7. 안부 확인 (MVP) ← 지금 (7-1 알림·응답 완료 / 7-2 켜고 끄기·동의 완료 / 7-3 새벽 정리 작업 확인 중 / 7-4 내보낼 때 그 사람 사진 처리 — 정할 것)
 8. 홈 화면 위젯 (iOS부터)
 9. TV 앱 (삼성 Tizen부터)
 
@@ -172,6 +176,10 @@ eas build --profile preview         # 기기 테스트용 빌드
   joined=초대 코드로 방금(10분 안) 들어온 사람 → 그 그룹 다른 구성원 모두에게 '가족이 들어왔어요'(`requestJoinNotify(groupId)`, 한 번만은 `join_notification_log` 0006).
   wellbeing_off=내 안부 확인을 방금(10분 안) 스스로 껐을 때 → 그 그룹 관리자에게 '안부 확인이 꺼졌어요 / 엄마가 안부 확인을 껐어요'(`requestWellbeingOffNotify()`, 끈 그룹마다 한 번은 `wellbeing_changes.notified_at` 0011).
   배포: `npx supabase functions deploy notify`. 함수는 앱 tsc에서 빼 두었다(tsconfig exclude, Deno로 검사).
+- 새벽 정리 함수 `cleanup`(0012, 7-3)은 pg_cron → pg_net으로 불리므로 JWT 확인을 끈다(`config.toml` `[functions.cleanup] verify_jwt = false`).
+  대신 `start_cleanup()`이 `cleanup_runs`에 만든 일회용 표를 `claim_cleanup`(10분 안, 한 번)으로 확인한다. 비밀값 설정은 필요 없다.
+  함수 주소(프로젝트 ref)는 `start_cleanup()` 안에 적혀 있다. 배포: `npx supabase functions deploy cleanup --use-api --no-verify-jwt`.
+  저장소 파일은 SQL로 지울 수 없어(지워도 실제 파일이 남음) 함수가 Storage API로 지운다.
 - 카카오·구글 로그인 복귀 주소는 `familyphoto://auth/callback` 고정 (Supabase가 IP 주소 복귀를 거부하므로 Expo Go 기본 주소를 쓰지 않는다).
   Android Expo Go에서는 이 방식이 동작하지 않으므로 Android는 개발 빌드부터 테스트한다.
   안드로이드는 이 복귀 주소가 Expo Router 화면 이동에도 전달되어 로그인 직후 빈 화면이 생겼다. `src/app/+native-intent.tsx`가 auth/callback 주소의 화면 이동을 막는다 (10/20).
@@ -220,7 +228,7 @@ eas build --profile preview         # 기기 테스트용 빌드
 
 | 무엇 | 왜 | 언제·어떻게 없애나 | 끝났는지 확인 |
 |---|---|---|---|
-| 3단계 이전 테스트로 생긴 '올리는 중' 묶음과 파일 | 실패한 보내기 시험 | 7단계 24시간 정리 작업이 지운다. 그 전이라도 출시 전 DB 초기화 | posts에 status='uploading'이 24시간 넘게 남지 않음 |
+| 3단계 이전 테스트로 생긴 '올리는 중' 묶음과 파일 | 실패한 보내기 시험 | 7-3 새벽 정리(0012)가 묶음과 폴더째 파일을 지운다 (10/25 만듦, 사용자 확인 뒤 이 줄을 지운다) | posts에 status='uploading'이 24시간 넘게 남지 않음 |
 
 ## 지금 하지 않는 것 (MVP 범위 밖)
 - 설치 후 자동 연결(디퍼드 딥링크) — 숫자 코드가 주 경로
