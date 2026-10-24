@@ -33,6 +33,8 @@ export function toGroupErrorMessage(error: unknown): string {
   if (msg.includes('not_member')) return ko.groupErrors.notMember;
   if (msg.includes('use_leave')) return ko.groupErrors.useLeave;
   if (msg.includes('invalid_phone')) return ko.groupErrors.invalidPhone;
+  if (msg.includes('recently_declined')) return ko.wellbeingAdmin.recentlyDeclined;
+  if (msg.includes('request_required')) return ko.myWellbeing.adminOff;
   // 개발 중에는 원인을 바로 볼 수 있게 오류 원문을 터미널과 화면에 함께 보여준다.
   if (__DEV__) {
     const detail = JSON.stringify(error);

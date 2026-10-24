@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 // 그룹·구성원·초대 데이터 읽기와 RPC 호출.
 // 여러 표를 함께 바꾸는 일은 DB 함수(RPC)로만 한다 (CLAUDE.md 보안 규칙 6).
 
-export type Group = { id: string; name: string };
+export type Group = { id: string; name: string; wellbeing_days?: number };
 
 export type Member = {
   id: string;
@@ -12,6 +12,10 @@ export type Member = {
   is_admin: boolean;
   easy_mode: boolean;
   wellbeing_check: boolean;
+  /** 관리자가 안부 확인을 켜 달라고 요청한 시각 (본인 답을 기다리는 중) */
+  wellbeing_requested_at: string | null;
+  /** 본인이 '아니요'를 누른 시각 (7일 동안 다시 요청 못 함, 0011) */
+  wellbeing_declined_at: string | null;
   joined_at: string;
 };
 
@@ -68,7 +72,7 @@ export async function getMyDefaultName(userId: string): Promise<string> {
 export async function getGroup(groupId: string): Promise<Group | null> {
   const { data, error } = await supabase
     .from('groups')
-    .select('id, name')
+    .select('id, name, wellbeing_days')
     .eq('id', groupId)
     .maybeSingle();
   if (error) throw error;
@@ -78,7 +82,7 @@ export async function getGroup(groupId: string): Promise<Group | null> {
 export async function listMembers(groupId: string): Promise<Member[]> {
   const { data, error } = await supabase
     .from('members')
-    .select('id, user_id, display_name, is_admin, easy_mode, wellbeing_check, joined_at')
+    .select('id, user_id, display_name, is_admin, easy_mode, wellbeing_check, wellbeing_requested_at, wellbeing_declined_at, joined_at')
     .eq('group_id', groupId)
     .eq('status', 'active')
     .order('joined_at');

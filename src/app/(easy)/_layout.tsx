@@ -8,6 +8,7 @@ import { openFromNotification, registerPush } from '@/features/push/push';
 
 // 쉬운 화면 모음 (개발 6단계). 탭 바 없음, 화면 깊이 2단계 이하, 모든 화면에 '처음으로' (CLAUDE.md).
 //   home(쉬운 화면 홈) → play/[id](한 장씩 보기·다 봤어요) / past(지난 사진) / more(더보기) / connect(다른 가족과도 연결하기) / camera(사진 찍어 보내기·영상 한마디)
+//   / wellbeing(안부 확인 켜기 요청 동의·처음 안내, 7-2)
 export const unstable_settings = { initialRouteName: 'home' };
 
 export default function EasyLayout() {
@@ -39,6 +40,7 @@ export default function EasyLayout() {
       <Stack.Screen name="past" />
       <Stack.Screen name="more" />
       <Stack.Screen name="connect" />
+      <Stack.Screen name="wellbeing" options={{ gestureEnabled: false }} />
       <Stack.Screen
         name="camera"
         options={{ animation: 'slide_from_bottom', contentStyle: { backgroundColor: easyColors.dark } }}

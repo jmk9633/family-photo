@@ -8,13 +8,14 @@ import { Button } from '@/components/Button';
 import { FeedList } from '@/components/FeedList';
 import { GroupPicker } from '@/components/GroupPicker';
 import { StartChoices } from '@/components/StartChoices';
+import { MyWellbeingBanner } from '@/components/MyWellbeingBanner';
 import { WellbeingBanner } from '@/components/WellbeingBanner';
 import { colors, size } from '@/components/tokens';
 import { ko } from '@/copy/ko';
 import { useMyGroups } from '@/features/groups/useMyGroups';
 
 // 사진 탭: 월별 사진 타임라인 (F-FRFNRL, 와이어프레임 Home).
-// 위: '모든 가족 ▾' 그룹 선택, 그 아래 안부 띠(관리자만, 7-1). 주간 모음 카드·알림 종은 해당 기능 단계에서 붙인다.
+// 위: '모든 가족 ▾' 그룹 선택, 그 아래 안부 띠(관리자만, 7-1)와 내 안부 확인 띠(대상자 본인, 7-2). 주간 모음 카드·알림 종은 해당 기능 단계에서 붙인다.
 
 export default function PhotosTab() {
   const { groups, failed, reload } = useMyGroups();
@@ -71,6 +72,7 @@ export default function PhotosTab() {
       </View>
 
       <WellbeingBanner />
+      <MyWellbeingBanner />
 
       <FeedList
         groups={groups}

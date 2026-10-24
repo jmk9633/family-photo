@@ -20,6 +20,11 @@ export function requestAdminNotify(groupId: string): void {
   invoke('admin_changed', { type: 'admin_changed', groupId });
 }
 
+/** 내 안부 확인을 스스로 끈 뒤: 그 그룹 관리자에게 '엄마가 안부 확인을 껐어요' (끈 그룹마다 한 번, 7-2) */
+export function requestWellbeingOffNotify(): void {
+  invoke('wellbeing_off', { type: 'wellbeing_off' });
+}
+
 function invoke(type: string, body: Record<string, string>): void {
   supabase.functions
     .invoke('notify', { body })

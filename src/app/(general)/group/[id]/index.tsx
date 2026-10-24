@@ -26,11 +26,28 @@ import {
   NAME_MAX,
   toGroupErrorMessage,
 } from '@/features/groups/format';
-import { formatPhone, listMemberPhones } from '@/features/wellbeing/api';
+import { requestWellbeingOffNotify } from '@/features/push/notify';
+import {
+  formatPhone,
+  getMyWellbeing,
+  listMemberPhones,
+  nextRequestDay,
+  requestWellbeing,
+  setMyWellbeing,
+  setWellbeingDays,
+  stopWellbeing,
+  WELLBEING_DAYS,
+  type MyWellbeing,
+} from '@/features/wellbeing/api';
 
 // 그룹 화면: 구성원과 태그, 내 이름 바꾸기, 관리자의 초대하기·보낸 초대 목록,
 // 관리자가 구성원을 누르면 전화번호(7-1, 안부 알림 '전화하기'용)·내보내기(F-LMXBXX), 맨 아래 그룹 나가기 (6단계).
-// 전화번호는 관리자에게만 보인다 (member_phones, 0010). 연결된 기기·안부 확인 설정·합치기는 각 단계에서 추가한다.
+// 전화번호는 관리자에게만 보인다 (member_phones, 0010). 연결된 기기·합치기는 각 단계에서 추가한다.
+// 안부 확인 켜고 끄기 (7-2, F-MNBFHT):
+//   관리자 — '안부 확인' 칸에서 기간 2·3·5·7일, 구성원을 누르면 '안부 확인 끄기' 또는 '켜 달라고 요청하기'
+//            (요청 중·거절 뒤 다시 요청할 수 있는 날은 구성원 이름 아래에)
+//   본인   — 안부 확인이 있었던 그룹이면 '내 안부 확인' 칸: 켜짐이면 끄기(관리자에게 알림), 본인이 껐으면 다시 켜기,
+//            관리자가 요청했으면 좋아요·아니요 (결정 5)
 export default function GroupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { session } = useSession();
@@ -40,6 +57,8 @@ export default function GroupScreen() {
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [phones, setPhones] = useState<Record<string, string>>({});
+  const [myWb, setMyWb] = useState<MyWellbeing | null>(null);
+  const [wbBusy, setWbBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -55,12 +74,19 @@ export default function GroupScreen() {
 
   const load = useCallback(() => {
     setFailed(false);
-    Promise.all([getGroup(id), listMembers(id), listOpenInvites(id), listMemberPhones(id).catch(() => ({}))])
-      .then(([g, m, inv, ph]) => {
+    Promise.all([
+      getGroup(id),
+      listMembers(id),
+      listOpenInvites(id),
+      listMemberPhones(id).catch(() => ({})),
+      getMyWellbeing().catch(() => [] as MyWellbeing[]),
+    ])
+      .then(([g, m, inv, ph, wb]) => {
         setGroup(g);
         setMembers(m);
         setInvites(inv);
         setPhones(ph);
+        setMyWb(wb.find((w) => w.group_id === id) ?? null);
         setLoaded(true);
       })
       .catch(() => setFailed(true));
@@ -111,11 +137,89 @@ export default function GroupScreen() {
       openPhone(m);
       return;
     }
+    const wbAction = m.wellbeing_check
+      ? { text: ko.wellbeingAdmin.stop, onPress: () => confirmStopWellbeing(m) }
+      : !m.wellbeing_requested_at && !nextRequestDay(m.wellbeing_declined_at)
+        ? { text: ko.wellbeingAdmin.request, onPress: () => confirmRequestWellbeing(m) }
+        : null;
     Alert.alert(m.display_name || ko.feed.unknownSender, undefined, [
       { text: ko.group.phoneAction, onPress: () => openPhone(m) },
-      { text: ko.group.removeConfirm, style: 'destructive', onPress: () => confirmRemove(m) },
-      { text: ko.common.cancel, style: 'cancel' },
+      ...(wbAction ? [wbAction] : []),
+      { text: ko.group.removeConfirm, style: 'destructive' as const, onPress: () => confirmRemove(m) },
+      { text: ko.common.cancel, style: 'cancel' as const },
     ]);
+  }
+
+  function confirmStopWellbeing(m: Member) {
+    const name = m.display_name || ko.feed.unknownSender;
+    Alert.alert(ko.wellbeingAdmin.stopTitle(name), ko.wellbeingAdmin.stopText, [
+      { text: ko.common.cancel, style: 'cancel' },
+      {
+        text: ko.wellbeingAdmin.stop,
+        style: 'destructive',
+        onPress: () => runNotice(() => stopWellbeing(m.id), ko.wellbeingAdmin.stopped(name)),
+      },
+    ]);
+  }
+
+  function confirmRequestWellbeing(m: Member) {
+    const name = m.display_name || ko.feed.unknownSender;
+    Alert.alert(ko.wellbeingAdmin.requestTitle(name), ko.wellbeingAdmin.requestText, [
+      { text: ko.common.cancel, style: 'cancel' },
+      {
+        text: ko.wellbeingAdmin.requestConfirm,
+        onPress: () => runNotice(() => requestWellbeing(m.id), ko.wellbeingAdmin.requested(name)),
+      },
+    ]);
+  }
+
+  async function runNotice(job: () => Promise<void>, done: string) {
+    setNotice(null);
+    try {
+      await job();
+      setNotice(done);
+    } catch (e) {
+      setNotice(toGroupErrorMessage(e));
+    } finally {
+      load();
+    }
+  }
+
+  async function changeDays(days: number) {
+    if (!group || group.wellbeing_days === days) return;
+    const before = group.wellbeing_days;
+    setGroup({ ...group, wellbeing_days: days });
+    setNotice(null);
+    try {
+      await setWellbeingDays(id, days);
+      setNotice(ko.wellbeingAdmin.daysSaved(days));
+    } catch (e) {
+      setGroup({ ...group, wellbeing_days: before });
+      setNotice(toGroupErrorMessage(e));
+    }
+  }
+
+  // 내 안부 확인 (본인): 끄기는 확인 후 관리자에게 알림, 다시 켜기·요청에 답하기는 바로
+  async function changeMyWellbeing(on: boolean, askFirst: boolean) {
+    if (askFirst) {
+      Alert.alert(ko.myWellbeing.offConfirmTitle, ko.myWellbeing.offConfirmText, [
+        { text: ko.myWellbeing.keep, style: 'cancel' },
+        { text: ko.myWellbeing.turnOff, style: 'destructive', onPress: () => changeMyWellbeing(false, false) },
+      ]);
+      return;
+    }
+    const wasOn = !!myWb?.is_on;
+    setWbBusy(true);
+    setNotice(null);
+    try {
+      await setMyWellbeing(id, on);
+      if (wasOn && !on) requestWellbeingOffNotify();
+    } catch (e) {
+      setNotice(toGroupErrorMessage(e));
+    } finally {
+      setWbBusy(false);
+      load();
+    }
   }
 
   function confirmRemove(m: Member) {
@@ -233,6 +337,7 @@ export default function GroupScreen() {
                     {isAdmin ? <Text style={styles.more}>⋯</Text> : null}
                   </View>
                   {phone ? <Text style={styles.muted}>{formatPhone(phone)}</Text> : null}
+                  {isAdmin && !m.wellbeing_check ? <WellbeingStatus member={m} /> : null}
                   <View style={styles.tagRow}>
                     {m.is_admin ? <Tag label={ko.group.tags.admin} strong /> : null}
                     {m.easy_mode ? <Tag label={ko.group.tags.easy} /> : null}
@@ -243,6 +348,68 @@ export default function GroupScreen() {
             })}
           </View>
         </View>
+
+        {myWb ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{ko.myWellbeing.title}</Text>
+            <View style={[styles.card, styles.row]}>
+              <View style={styles.memberTop}>
+                <Text style={styles.memberName}>{ko.myWellbeing.title}</Text>
+                <Text style={[styles.muted, myWb.is_on && styles.onText]}>
+                  {myWb.is_on ? ko.myWellbeing.on : ko.myWellbeing.off}
+                </Text>
+              </View>
+              {myWb.requested ? (
+                <>
+                  <Text style={styles.body16}>{ko.myWellbeing.generalConsentTitle(group?.name ?? '', myWb.ever_on)}</Text>
+                  <Text style={styles.muted}>{ko.myWellbeing.generalConsentText}</Text>
+                  <View style={styles.inlineButtons}>
+                    <Button variant="outline" label={ko.myWellbeing.no} disabled={wbBusy} onPress={() => changeMyWellbeing(false, false)} style={styles.flex} />
+                    <Button label={ko.myWellbeing.yes} loading={wbBusy} onPress={() => changeMyWellbeing(true, false)} style={styles.flex} />
+                  </View>
+                </>
+              ) : myWb.is_on ? (
+                <>
+                  <Text style={styles.muted}>{ko.myWellbeing.generalHintOn(myWb.days)}</Text>
+                  <Button variant="outline" label={ko.myWellbeing.turnOff} loading={wbBusy} onPress={() => changeMyWellbeing(false, true)} />
+                </>
+              ) : myWb.can_turn_on ? (
+                <>
+                  <Text style={styles.muted}>{ko.myWellbeing.hintOff}</Text>
+                  <Button variant="outline" label={ko.myWellbeing.turnOn} loading={wbBusy} onPress={() => changeMyWellbeing(true, false)} />
+                </>
+              ) : (
+                <Text style={styles.muted}>{ko.myWellbeing.adminOff}</Text>
+              )}
+            </View>
+          </View>
+        ) : null}
+
+        {isAdmin && group?.wellbeing_days ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{ko.wellbeingAdmin.section}</Text>
+            <View style={[styles.card, styles.row]}>
+              <Text style={styles.memberName}>{ko.wellbeingAdmin.daysLabel}</Text>
+              <View style={styles.chips} accessibilityRole="radiogroup">
+                {WELLBEING_DAYS.map((d) => {
+                  const on = group.wellbeing_days === d;
+                  return (
+                    <Pressable
+                      key={d}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      onPress={() => changeDays(d)}
+                      style={({ pressed }) => [styles.chip, on && styles.chipOn, pressed && styles.pressed]}
+                    >
+                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{ko.wellbeingAdmin.days(d)}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text style={styles.muted}>{ko.wellbeingAdmin.daysHint}</Text>
+            </View>
+          </View>
+        ) : null}
 
         {editing ? (
           <View style={styles.section}>
@@ -338,6 +505,14 @@ export default function GroupScreen() {
   );
 }
 
+/** 관리자에게만: 꺼진 구성원의 요청 중·거절 상태 */
+function WellbeingStatus({ member }: { member: Member }) {
+  if (member.wellbeing_requested_at) return <Text style={styles.muted}>{ko.wellbeingAdmin.pending}</Text>;
+  const next = nextRequestDay(member.wellbeing_declined_at);
+  if (next) return <Text style={styles.muted}>{ko.wellbeingAdmin.declined(next.month, next.day)}</Text>;
+  return null;
+}
+
 function Tag({ label, strong }: { label: string; strong?: boolean }) {
   return (
     <View style={[styles.tag, strong && styles.tagStrong]}>
@@ -380,4 +555,19 @@ const styles = StyleSheet.create({
   tagText: { fontSize: 13, color: colors.text },
   tagTextStrong: { color: '#FFFFFF' },
   inlineButtons: { flexDirection: 'row', gap: 10 },
+  body16: { fontSize: size.body, lineHeight: 24, fontWeight: '600', color: colors.text },
+  onText: { color: colors.accent, fontWeight: '700' },
+  chips: { flexDirection: 'row', gap: 8 },
+  chip: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: size.radius,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipOn: { backgroundColor: colors.text, borderColor: colors.text },
+  chipText: { fontSize: size.body, fontWeight: '600', color: colors.text },
+  chipTextOn: { color: '#FFFFFF' },
 });

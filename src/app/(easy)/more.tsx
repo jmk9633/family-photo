@@ -11,12 +11,19 @@ import { ko } from '@/copy/ko';
 import { useMode } from '@/features/auth/mode';
 import { signOut, useSession } from '@/features/auth/session';
 import { getShowSeen, setShowSeen } from '@/features/posts/views';
+import { requestWellbeingOffNotify } from '@/features/push/notify';
 import { getPushStatus, requestPush, unregisterPush, type PushStatus } from '@/features/push/push';
+import { getMyWellbeing, setMyWellbeingAll, type MyWellbeing } from '@/features/wellbeing/api';
 import { supabase } from '@/lib/supabase';
 
 // 쉬운 화면 더보기 (와이어프레임 '쉬운 모드 · 더보기', 10/18 결정 12 — 6단계에서는 일부만).
-//   알림 · 내가 본 사진을 가족에게 알리기 · 다른 가족과도 연결하기 · 일반 화면으로 바꾸기(계정이 있는 사람만)
-// 안부 확인은 7단계, TV 연결은 9단계, 보낼 가족 정하기·관리자 메뉴는 MVP 이후에 더한다.
+//   내 안부 확인(7-2, 안부 확인이 한 번이라도 있었던 사람만) · 알림 · 내가 본 사진을 가족에게 알리기
+//   · 다른 가족과도 연결하기 · 일반 화면으로 바꾸기(계정이 있는 사람만)
+// TV 연결은 9단계, 보낼 가족 정하기·관리자 메뉴는 MVP 이후에 더한다.
+//
+// 내 안부 확인 (F-MNBFHT, 7-2 결정 1·2): 가족이 여럿이어도 스위치 하나.
+//   켜짐 → 누르면 카드 안에서 '끄면 가족에게 껐다고 알려요' + 끄기·그대로 두기 → 켜진 모든 가족에서 끄고 관리자에게 알림
+//   꺼짐(본인이 끔) → 누르면 바로 다시 켬 / 꺼짐(관리자가 끔) → 스위치 없음, 관리자가 요청하면 동의 화면으로
 
 export default function EasyMore() {
   const { session } = useSession();
@@ -27,6 +34,38 @@ export default function EasyMore() {
   const [seenFailed, setSeenFailed] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [switchFailed, setSwitchFailed] = useState(false);
+  const [wellbeing, setWellbeing] = useState<MyWellbeing[] | null>(null);
+  const [confirmOff, setConfirmOff] = useState(false);
+  const [wbBusy, setWbBusy] = useState(false);
+  const [wbFailed, setWbFailed] = useState(false);
+
+  const loadWellbeing = useCallback(() => {
+    getMyWellbeing()
+      .then(setWellbeing)
+      .catch(() => setWellbeing(null));
+  }, []);
+  useFocusEffect(loadWellbeing);
+
+  const wbOn = !!wellbeing?.some((w) => w.is_on);
+  const wbCanOn = !wbOn && !!wellbeing?.some((w) => w.can_turn_on);
+  const wbRequested = wellbeing?.filter((w) => w.requested) ?? [];
+
+  async function changeWellbeing(on: boolean) {
+    if (wbBusy) return;
+    setWbBusy(true);
+    setWbFailed(false);
+    try {
+      const changed = await setMyWellbeingAll(on);
+      if (!on && changed > 0) requestWellbeingOffNotify();
+      setConfirmOff(false);
+      loadWellbeing();
+    } catch (e) {
+      if (__DEV__) console.warn('[wellbeing change failed]', e);
+      setWbFailed(true);
+    } finally {
+      setWbBusy(false);
+    }
+  }
 
   // 설정 앱에서 알림을 켜고 돌아오면 다시 확인한다
   useFocusEffect(
@@ -80,6 +119,64 @@ export default function EasyMore() {
             {ko.easy.more.title}
           </Text>
         </View>
+
+        {wellbeing && wellbeing.length > 0 ? (
+          <View style={styles.card}>
+            <View style={styles.toggleRow}>
+              <View style={styles.cardText}>
+                <Text style={styles.cardTitle}>{ko.myWellbeing.title}</Text>
+                <Text style={styles.cardHint}>
+                  {wbOn ? ko.myWellbeing.hintOn : wbCanOn ? ko.myWellbeing.hintCanOn : ko.myWellbeing.hintOff}
+                </Text>
+              </View>
+              {wbOn || wbCanOn ? (
+                <Pressable
+                  accessibilityRole="switch"
+                  accessibilityLabel={ko.myWellbeing.title}
+                  accessibilityState={{ checked: wbOn, busy: wbBusy }}
+                  onPress={() => (wbOn ? setConfirmOff(true) : changeWellbeing(true))}
+                  disabled={wbBusy || confirmOff}
+                  style={({ pressed }) => [styles.pill, wbOn ? styles.pillOn : styles.pillOff, pressed && styles.pressed]}
+                >
+                  <Text style={[styles.pillText, !wbOn && styles.pillTextOff]}>
+                    {wbOn ? ko.myWellbeing.on : ko.myWellbeing.off}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Text style={styles.stateText}>{ko.myWellbeing.off}</Text>
+              )}
+            </View>
+            {confirmOff ? (
+              <View style={styles.confirm}>
+                <Text style={styles.cardHint} accessibilityLiveRegion="polite">
+                  {ko.myWellbeing.offConfirm}
+                </Text>
+                <BigButton label={ko.myWellbeing.turnOff} loading={wbBusy} onPress={() => changeWellbeing(false)} />
+                <BigButton variant="gray" label={ko.myWellbeing.keep} disabled={wbBusy} onPress={() => setConfirmOff(false)} />
+              </View>
+            ) : null}
+            {wbRequested.length > 0 ? (
+              <View style={styles.confirm}>
+                <Text style={styles.cardHint}>{ko.myWellbeing.requestHint}</Text>
+                <BigButton
+                  variant="outline"
+                  label={ko.myWellbeing.seeRequest}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/wellbeing',
+                      params: { mode: 'consent', again: wbRequested.some((w) => w.ever_on) ? '1' : '0' },
+                    })
+                  }
+                />
+              </View>
+            ) : null}
+            {wbFailed ? (
+              <Text style={styles.error} accessibilityLiveRegion="polite">
+                {ko.myWellbeing.failed}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {push ? (
           <View style={styles.card}>
@@ -197,6 +294,8 @@ const styles = StyleSheet.create({
   pillOff: { backgroundColor: easyColors.background, borderWidth: 2, borderColor: easyColors.border },
   pillText: { fontSize: 19, fontWeight: '700', color: '#FFFFFF' },
   pillTextOff: { color: easyColors.text },
+  stateText: { fontSize: 19, fontWeight: '700', color: easyColors.textSecondary, paddingHorizontal: 8 },
+  confirm: { gap: 10 },
   pressed: { opacity: 0.7 },
   error: { fontSize: easySize.body, color: easyColors.error },
   bottom: { marginTop: 'auto', gap: 8 },

@@ -11,6 +11,9 @@
 //             ({ type, groupId }, 같은 합류는 한 번 — join_notification_log 0006, 6단계 10/18 결정)
 //   admin_changed: 내가 그 그룹을 방금(10분 안) 나가 관리자가 자동으로 넘어갔다 → 새 관리자와 그룹 구성원 모두에게
 //             ({ type, groupId }, 이전 한 건당 한 번 — admin_transfer_log 0007, F-LMXBXX)
+//   wellbeing_off: 내가 방금(10분 안) 내 안부 확인을 스스로 껐다 → 그 그룹 관리자에게 '엄마가 안부 확인을 껐어요'
+//             ({ type }, 끈 그룹마다 한 번 — wellbeing_changes.notified_at, claim_wellbeing_off_notices 0011, F-MNBFHT)
+//             관리자가 끈 경우에는 대상자에게 알리지 않는다 (7-2 결정 6).
 //
 // 이름은 받는 사람이 보는 그룹에서의 이름 (그 묶음을 받은 그룹 중 받는 사람이 먼저 들어간 그룹).
 //
@@ -46,6 +49,7 @@ const copy = {
   seen: { title: '가족이 사진을 봤어요', body: (name: string) => `${iga(name)} 보낸 사진을 봤어요` },
   joined: { title: '가족이 들어왔어요', body: (name: string, group: string) => `${iga(name)} ${group}에 들어왔어요` },
   adminMe: { title: '관리자가 되었어요', body: (group: string) => `이제 ${group}의 관리자예요. 가족을 초대하고 설정을 바꿀 수 있어요` },
+  wellbeingOff: { title: '안부 확인이 꺼졌어요', body: (name: string) => `${iga(name)} 안부 확인을 껐어요` },
   adminOthers: { title: '관리자가 바뀌었어요', body: (name: string, group: string) => `이제 ${iga(name)} ${group}의 관리자예요` },
   family: '가족',
 };
@@ -110,6 +114,7 @@ Deno.serve(async (req) => {
   }
   if (input.type === 'joined') return await handleJoined(admin, me, input.groupId ?? '');
   if (input.type === 'admin_changed') return await handleAdminChanged(admin, me, input.groupId ?? '');
+  if (input.type === 'wellbeing_off') return await handleWellbeingOff(admin, me);
   const kind = input.type as Kind;
   const postId = input.postId ?? '';
   if (!KINDS.includes(kind) || !/^[0-9a-f-]{36}$/i.test(postId)) return json(400, { error: 'input' });
@@ -400,6 +405,32 @@ async function handleAdminChanged(admin: SupabaseClient, me: string, groupId: st
     } catch (e) {
       await admin.from('admin_transfer_log').update({ notified_at: null }).eq('id', log.id);
       console.error('[notify] admin_changed deliver failed', e);
+      return json(502, { error: 'deliver' });
+    }
+  }
+  return json(200, { sent });
+}
+
+/** 끔 알림: 부른 사람이 방금 스스로 끈 그룹마다 그 그룹 관리자에게 한 번 (DB 함수가 한 번만 가져가게 표시한다) */
+async function handleWellbeingOff(admin: SupabaseClient, me: string): Promise<Response> {
+  const { data, error } = await admin.rpc('claim_wellbeing_off_notices', { p_user: me });
+  if (error) throw error;
+  const rows = (data ?? []) as { change_ids: string[]; group_id: string; target_name: string; admin_ids: string[] }[];
+  if (rows.length === 0) return json(200, { sent: 0, reason: 'none' });
+  let sent = 0;
+  for (const row of rows) {
+    if (row.admin_ids.length === 0) continue;
+    try {
+      sent += await pushTo(
+        admin,
+        row.admin_ids,
+        () => ({ title: copy.wellbeingOff.title, body: copy.wellbeingOff.body(row.target_name) }),
+        { groupId: row.group_id, kind: 'wellbeing_off' },
+        () => row.target_name,
+      );
+    } catch (e) {
+      await admin.from('wellbeing_changes').update({ notified_at: null }).in('id', row.change_ids);
+      console.error('[notify] wellbeing_off deliver failed', e);
       return json(502, { error: 'deliver' });
     }
   }

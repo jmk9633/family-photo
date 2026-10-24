@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/components/easy/BigButton';
@@ -15,6 +15,7 @@ import { formatDay, titleOf } from '@/features/posts/format';
 import { retryOutbox } from '@/features/posts/outbox';
 import { loadEasyFeed, type EasyFeed } from '@/features/posts/unseen';
 import { getPushStatus, requestPush } from '@/features/push/push';
+import { getMyWellbeing } from '@/features/wellbeing/api';
 import { signedSource, signPaths } from '@/lib/signedUrl';
 
 // 쉬운 화면 홈 (F-MGGNVR, 와이어프레임 '쉬운 모드 · 홈'). 탭 없는 한 화면.
@@ -24,8 +25,29 @@ import { signedSource, signPaths } from '@/lib/signedUrl';
 // - 아래에 지난 사진 월 카드 2개와 '전체 보기', 오른쪽 위 '더보기'.
 // - 숫자로 막 연결됐으면 '연결됐어요' → (알림 권한을 아직 안 물었으면) 알림 안내를 먼저 보여준다.
 // 아래에 '사진 찍어 보내기'·'영상 한마디' 큰 버튼 두 개 (6-2). 보내지 못해 보관해 둔 것은 홈을 열 때 다시 보낸다.
+// 안부 확인(7-2): 홈이 보이면 관리자의 켜기 요청이 있으면 동의 화면을, 켜진 채 처음이면 안내를 앱을 열 때 한 번 띄운다.
 
 const SLIDE_MS = 8000;
+
+// 안부 동의·안내는 앱을 한 번 열 때 한 번만 띄운다 ('처음으로'로 넘기면 다음에 앱을 열 때 다시)
+let wellbeingAsked = false;
+
+async function openWellbeingOnce() {
+  if (wellbeingAsked) return;
+  wellbeingAsked = true;
+  try {
+    const rows = await getMyWellbeing();
+    const asks = rows.filter((r) => r.requested);
+    if (asks.length > 0) {
+      router.push({ pathname: '/wellbeing', params: { mode: 'consent', again: asks.some((r) => r.ever_on) ? '1' : '0' } });
+    } else if (rows.some((r) => r.intro_needed)) {
+      router.push({ pathname: '/wellbeing', params: { mode: 'intro' } });
+    }
+  } catch (e) {
+    wellbeingAsked = false; // 못 불러왔으면 다음에 홈이 보일 때 다시
+    if (__DEV__) console.warn('[wellbeing status failed]', e);
+  }
+}
 const SLIDE_COUNT = 5;
 
 export default function EasyHome() {
@@ -70,6 +92,23 @@ export default function EasyHome() {
       setFailed(true);
     }
   }, [me, isAnonymous, refreshMode]);
+
+  // 연결됐어요·알림 안내가 끝나 홈이 보일 때.
+  // 앱을 뒤로 보냈다가 다시 열면 한 번 더 확인한다 (요청은 푸시 없이 이렇게만 알린다, 결정 3)
+  // 홈이 보이는 동안에만 (사진을 보는 중에는 띄우지 않는다)
+  useFocusEffect(
+    useCallback(() => {
+      if (step !== 'home' || !me) return;
+      openWellbeingOnce();
+      const sub = AppState.addEventListener('change', (s) => {
+        if (s === 'active') {
+          wellbeingAsked = false;
+          openWellbeingOnce();
+        }
+      });
+      return () => sub.remove();
+    }, [step, me]),
+  );
 
   useFocusEffect(
     useCallback(() => {
