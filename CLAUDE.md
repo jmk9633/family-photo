@@ -27,7 +27,7 @@ Expo 일반 규칙은 `AGENTS.md`도 함께 따른다 (Expo API는 기억으로 
 src/app/            Expo Router 화면
   (auth)/           로그인 전 화면 (로그인, 이메일, 코드 입력)
   (general)/        일반 모드 화면
-  (easy)/           쉬운 모드 화면 (home·play/[id]·past·more)
+  (easy)/           쉬운 모드 화면 (home·play/[id]·past·more·connect·camera·wellbeing)
 src/components/     공통 컴포넌트 (src/components/easy/ = 쉬운 모드 전용)
 src/copy/ko.ts      모든 화면 문구
 src/lib/            supabase 클라이언트, 이미지 압축, 업로드, 날짜 유틸
@@ -97,7 +97,8 @@ supabase/tests      RLS 테스트 (pgTAP)
 | 안부 기간 | 2·3·5·7일 (기본 3일) | `groups.wellbeing_days` 검사 |
 | 안부 판단 | 매일 10:00 KST, 알림은 관리자만(대상자 본인 제외). 같은 무활동 구간에 한 번, '괜찮아요' 뒤 기간 안에는 다시 안 만듦. 대상자가 활동하면 닫힘, 새 묶음이 오면 넛지 닫힘 | pg_cron `wellbeing-daily` 01:00 UTC → `wellbeing_daily()` = `run_wellbeing_check` + `send_wellbeing_pushes`(pg_net으로 Expo) (0010) |
 | 구성원 전화번호 | 관리자가 넣고 관리자만 봄(선택). 숫자만 저장, 안부 '전화하기'에 씀 | `member_phones` RLS, `set_member_phone` → `invalid_phone` (0010) |
-| 안부 다시 켜기 | 관리자는 요청만, 본인이 '좋아요'를 눌러야 켜짐 | `request_wellbeing`, 트리거 `consent_required` |
+| 안부 다시 켜기 | 관리자는 요청만, 본인이 '좋아요'를 눌러야 켜짐. 본인이 끈 곳만 본인이 바로 다시 켬(관리자가 끈 곳·처음 켜기는 요청 + 동의). '아니요' 뒤 7일 동안 다시 요청 못 함 | `request_wellbeing` → `recently_declined`, `set_my_wellbeing` → `request_required`, 트리거 `consent_required` (0011) |
+| 안부 켜고 끄기 (7-2) | 쉬운 화면은 더보기 맨 위 '내 안부 확인' 스위치 하나로 모든 가족 함께, 일반 화면은 그룹 화면 '내 안부 확인'에서 그룹마다. 본인이 끄면 그 그룹 관리자에게 '엄마가 안부 확인을 껐어요'(가족별 한 번), 관리자가 끄면 대상자에게 알리지 않음. 켜기 요청은 푸시 없이 다음에 앱을 열 때 동의 화면(쉬운 화면)·사진 탭 띠(일반 화면). 켜진 채 처음 연결되면 안내 한 번. 꺼지면 열린 안부 알림이 바로 닫힘. 모든 변경은 `wellbeing_changes`에 기록(관리자·본인만 봄) | `my_wellbeing`, `set_my_wellbeing_all`, `answer_wellbeing_requests`, `wellbeing_seen_intro`, `stop_wellbeing`, notify `wellbeing_off` → `claim_wellbeing_off_notices` (0011) |
 | 주간 모음 제안 | 일요일 20:00 로컬 알림, 최대 10장 | 앱 |
 | 사진 보존 | 기간 제한 없음 | — |
 | 나간 사람의 사진 삭제 | 본인이 요청하면 즉시 | `posts_delete_self` 정책 |
@@ -153,7 +154,7 @@ eas build --profile preview         # 기기 테스트용 빌드
 4. 보기 + 영상 보내기 (완료)
 5. 반응(하트)·'봤어요' + 애플 로그인 우회 제거 + 푸시 알림 (완료)
 6. 쉬운 모드 연결 (완료)
-7. 안부 확인 (MVP) ← 지금 (7-1 알림·응답 완료 / 7-2 켜고 끄기·동의 / 7-3 정리 작업)
+7. 안부 확인 (MVP) ← 지금 (7-1 알림·응답 완료 / 7-2 켜고 끄기·동의 완료 / 7-3 정리 작업)
 8. 홈 화면 위젯 (iOS부터)
 9. TV 앱 (삼성 Tizen부터)
 
@@ -169,6 +170,7 @@ eas build --profile preview         # 기기 테스트용 빌드
   new_post=받은 그룹 구성원에게, heart=그 사람의 그 묶음 첫 하트만, seen=그날 처음 볼 때만(시청 표시를 끈 사람 제외).
   admin_changed=그룹을 나가 관리자가 자동으로 넘어갔을 때 → 새 관리자('관리자가 되었어요')와 그룹('관리자가 바뀌었어요')에게 (0007).
   joined=초대 코드로 방금(10분 안) 들어온 사람 → 그 그룹 다른 구성원 모두에게 '가족이 들어왔어요'(`requestJoinNotify(groupId)`, 한 번만은 `join_notification_log` 0006).
+  wellbeing_off=내 안부 확인을 방금(10분 안) 스스로 껐을 때 → 그 그룹 관리자에게 '안부 확인이 꺼졌어요 / 엄마가 안부 확인을 껐어요'(`requestWellbeingOffNotify()`, 끈 그룹마다 한 번은 `wellbeing_changes.notified_at` 0011).
   배포: `npx supabase functions deploy notify`. 함수는 앱 tsc에서 빼 두었다(tsconfig exclude, Deno로 검사).
 - 카카오·구글 로그인 복귀 주소는 `familyphoto://auth/callback` 고정 (Supabase가 IP 주소 복귀를 거부하므로 Expo Go 기본 주소를 쓰지 않는다).
   Android Expo Go에서는 이 방식이 동작하지 않으므로 Android는 개발 빌드부터 테스트한다.
