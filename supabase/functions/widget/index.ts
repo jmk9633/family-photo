@@ -11,6 +11,9 @@
 //   sender : 'OO이 보냄' (앱의 ko.easy.home.sentByShort와 같다)
 //   날짜('오늘'·'어제'·'10월 24일')는 위젯이 그릴 때 정한다 (그리는 시각이 받는 시각과 다를 수 있어서)
 //
+// 8-2 (0015): iOS 26 위젯은 애플에서 받은 '다시 그려' 신호 주소를 { pushToken, pushEnv }로 함께 보낸다.
+//   매번 함께 보내므로 로그인을 바꿔 열쇠가 바뀌어도 다음 확인 때 새 열쇠로 옮겨진다. 저장은 set_widget_push_token.
+//
 // 배포: npx supabase functions deploy widget --use-api --no-verify-jwt
 
 import { createClient } from 'npm:@supabase/supabase-js@2.117.3';
@@ -65,9 +68,13 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json(405, { status: 'invalid' });
 
   let key = '';
+  let pushToken = '';
+  let pushEnv = '';
   try {
-    const body = (await req.json()) as { key?: unknown };
+    const body = (await req.json()) as { key?: unknown; pushToken?: unknown; pushEnv?: unknown };
     if (typeof body.key === 'string') key = body.key;
+    if (typeof body.pushToken === 'string') pushToken = body.pushToken.toLowerCase();
+    if (typeof body.pushEnv === 'string') pushEnv = body.pushEnv;
   } catch {
     // 아래에서 invalid
   }
@@ -76,6 +83,11 @@ Deno.serve(async (req) => {
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, secretKey(), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  if (pushToken) {
+    const saved = await admin.rpc('set_widget_push_token', { p_key: key, p_token: pushToken, p_env: pushEnv });
+    if (saved.error) console.error('[widget] push token save failed', saved.error.message);
+  }
 
   const { data, error } = await admin.rpc('widget_feed', { p_key: key });
   if (error) {

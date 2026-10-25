@@ -5,6 +5,7 @@
 // 그래서 같은 요청이 여러 번 와도 알림은 한 번이고, 앱이 거짓 요청을 보내도 아무 일도 없다.
 //
 //   new_post: 내가 보낸 묶음이 완료(ready)됐다 → 받은 그룹의 다른 활성 구성원에게
+//             + 그 사람들의 홈 화면 위젯에 '다시 그려' 신호 (iOS 26, 알림 허용과 상관없이, 밤에도 바로 — 8-2, 0015)
 //   heart   : 내가 그 묶음의 사진에 하트를 눌렀다 → 보낸 사람에게 (사람·묶음당 첫 하트만)
 //   seen    : 내가 그 묶음을 오늘 봤다 → 보낸 사람에게 (사람·묶음·날짜당 한 번, 시청 표시를 끈 사람은 안 보냄)
 //   joined  : 내가 초대 코드로 그 그룹에 방금(10분 안) 들어왔다 → 그 그룹의 다른 활성 구성원 모두에게
@@ -21,9 +22,11 @@
 // 보내지 않고 night_queue에 넣는다. 아침 8시에 pg_cron이 send_night_digest()로 한 사람당 하나로 묶어 보낸다.
 // 시험할 때는 `npx supabase secrets set NOTIFY_FORCE_NIGHT=1`로 낮에도 밤처럼 모은다 (끝나면 unset).
 //
-// 배포: npx supabase functions deploy notify  (JWT 확인은 기본값 그대로 켜 둔다)
+// 배포: npx supabase functions deploy notify --use-api  (JWT 확인은 기본값 그대로 켜 둔다. _shared/widgetPush.ts도 함께 올라간다)
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.117.3';
+
+import { sendWidgetPushes } from '../_shared/widgetPush.ts';
 
 type Kind = 'new_post' | 'heart' | 'seen';
 const KINDS: Kind[] = ['new_post', 'heart', 'seen'];
@@ -183,7 +186,9 @@ Deno.serve(async (req) => {
 
   try {
     const sent = await deliver(admin, kind, post, groupIds, me, recipients);
-    return json(200, { sent });
+    // 홈 화면 위젯 바로 바꾸기 (8-2). 실패해도 알림 결과에는 영향이 없다 (위젯은 30분 확인으로 바뀐다)
+    const widgets = kind === 'new_post' ? await sendWidgetPushes(admin, postId) : 0;
+    return json(200, { sent, widgets });
   } catch (e) {
     // 보내지 못했으면 기록을 지워 다음 요청 때 다시 보낼 수 있게 한다
     await admin.from('notification_log').delete().match({ kind, post_id: postId, actor_id: me, on_date: onDate });

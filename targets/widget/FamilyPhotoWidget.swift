@@ -8,6 +8,9 @@
 // - 위젯이 사진을 보여주는 것은 '봤어요'도 활동도 아니다 (서버가 아무것도 기록하지 않는다).
 // - 누르면 앱 홈으로 간다 (familyphoto://widget → 앱의 +native-intent.tsx·features/widget).
 // - 인터넷이 안 되면 마지막으로 받은 사진을 그대로 보여준다 (공용 칸에 저장). 다른 계정의 사진은 보여주지 않는다.
+// - 8-2: iOS 26부터는 새 사진이 오면 서버가 애플을 통해 '다시 그려' 신호를 보낸다 (WidgetKit 푸시, 알림 허용과 상관없음).
+//   애플이 준 신호 주소는 `FamilyPhotoPushHandler`가 공용 칸에 두고, 위젯이 서버에 물어볼 때마다 함께 보낸다.
+//   iOS 26보다 오래된 폰에는 이 부분이 없고 30분 확인만 한다.
 //
 // 문구는 위젯이 앱의 src/copy/ko.ts를 읽을 수 없어 아래 `Copy`에 모은다 (CLAUDE.md 화면 규칙의 예외).
 // 글씨는 쉬운 화면 기준(본문 18 이상)을 지킨다.
@@ -117,6 +120,47 @@ private enum Cache {
   }
 }
 
+private enum PushKeys {
+  static let token = "widgetPushToken"
+  static let env = "widgetPushEnv"
+}
+
+/// 애플이 위젯에 '다시 그려' 신호 주소를 주거나 바꿀 때 (iOS 26, 8-2).
+/// 주소를 공용 칸에 두고 위젯을 다시 그리게 해서, 다음 확인 때 서버로 보내지게 한다.
+@available(iOSApplicationExtension 26.0, *)
+struct FamilyPhotoPushHandler: WidgetPushHandler {
+  func pushTokenDidChange(_ pushInfo: WidgetPushInfo, widgets: [WidgetInfo]) {
+    let defaults = UserDefaults(suiteName: appGroup)
+    let hex = pushInfo.token.map { String(format: "%02x", $0) }.joined()
+    if widgets.isEmpty || hex.isEmpty {
+      // 위젯을 모두 뺐으면 주소를 지운다 (서버에 남은 주소는 애플이 '없음'이라고 하면 서버가 지운다)
+      defaults?.removeObject(forKey: PushKeys.token)
+      defaults?.removeObject(forKey: PushKeys.env)
+      return
+    }
+    if defaults?.string(forKey: PushKeys.token) == hex { return }
+    defaults?.set(hex, forKey: PushKeys.token)
+    // 개발 빌드(Debug)는 애플의 시험 서버, 출시 빌드는 실제 서버로 신호가 온다
+    #if DEBUG
+      defaults?.set("sandbox", forKey: PushKeys.env)
+    #else
+      defaults?.set("production", forKey: PushKeys.env)
+    #endif
+    WidgetCenter.shared.reloadAllTimelines()
+  }
+}
+
+extension WidgetConfiguration {
+  /// iOS 26이면 '다시 그려' 신호를 받게 한다. 그보다 오래된 폰은 그대로 (30분 확인만).
+  func pushHandlerIfAvailable() -> some WidgetConfiguration {
+    if #available(iOSApplicationExtension 26.0, *) {
+      return self.pushHandler(FamilyPhotoPushHandler.self)
+    } else {
+      return self
+    }
+  }
+}
+
 private enum Loader {
   static func load() async -> PhotoEntry {
     let defaults = UserDefaults(suiteName: appGroup)
@@ -133,7 +177,15 @@ private enum Loader {
       var req = URLRequest(url: url, timeoutInterval: 15)
       req.httpMethod = "POST"
       req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-      req.httpBody = try JSONEncoder().encode(["key": key])
+      var body = ["key": key]
+      // 8-2: 신호 주소가 있으면 함께 보낸다 (열쇠가 바뀌어도 다음 확인 때 서버가 새 열쇠로 옮긴다)
+      if let token = defaults?.string(forKey: PushKeys.token), !token.isEmpty,
+        let env = defaults?.string(forKey: PushKeys.env)
+      {
+        body["pushToken"] = token
+        body["pushEnv"] = env
+      }
+      req.httpBody = try JSONEncoder().encode(body)
       let (data, resp) = try await URLSession.shared.data(for: req)
       guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
       let feed = try JSONDecoder().decode(FeedResponse.self, from: data)
@@ -407,5 +459,6 @@ struct FamilyPhotoWidget: Widget {
     .configurationDisplayName(Copy.appName)
     .description(Copy.description)
     .supportedFamilies([.systemMedium, .systemLarge])
+    .pushHandlerIfAvailable()
   }
 }
