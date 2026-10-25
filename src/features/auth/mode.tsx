@@ -11,6 +11,7 @@ import {
 import { AppState } from 'react-native';
 
 import { touchActive } from '@/features/posts/api';
+import { syncWidget } from '@/features/widget/widget';
 import { supabase } from '@/lib/supabase';
 
 import { useSession } from './session';
@@ -120,8 +121,12 @@ export function ModeProvider({ children }: { children: ReactNode }) {
       touchActive(active).catch(() => {});
     };
     touch();
+    syncWidget(active);
     const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') touch();
+      if (s !== 'active') return;
+      touch();
+      // 홈 화면 위젯(8-1): 열쇠 확인 + 다시 그리기. 위젯 노출은 활동이 아니라서 위 touch와 따로 둔다
+      syncWidget(active);
     });
     return () => sub.remove();
   }, [active]);

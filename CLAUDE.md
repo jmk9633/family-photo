@@ -35,6 +35,7 @@ src/features/       기능별 로직 (auth, groups, invites, posts, views, wellb
 supabase/migrations 마이그레이션 SQL (번호 순서. 실제 DB에 한 번이라도 적용한 파일은 수정 금지)
 supabase/functions  Edge Functions
 supabase/tests      RLS 테스트 (pgTAP)
+targets/widget/     iOS 홈 화면 위젯 (SwiftUI, @bacons/apple-targets가 prebuild 때 Xcode 확장으로 만든다)
 ```
 
 ## 보안 규칙 (절대 어기지 말 것)
@@ -113,8 +114,10 @@ supabase/tests      RLS 테스트 (pgTAP)
 | 사진 보존 | 기간 제한 없음 | — |
 | 나간 사람의 사진 삭제 | 본인이 요청하면 즉시. 내보낼 때 관리자가 [사진도 지우기]를 고르면 함께 (기본은 남기기) | `posts_delete_self` 정책, `remove_member(…, true)` (0013) |
 | 사진 지우기·내리기 권한 | 내 사진은 나만 지움(일반·쉬운 화면 모두), 남의 사진은 받은 그룹의 관리자만 내림(알림 없음) | `deleteMyPost`, `take_down_post` (0013) |
-| 앱 스킴 | `familyphoto` (가칭, 서비스명 확정 시 변경) | `app.json` + Supabase Redirect URLs |
-| iOS 앱 ID (번들 ID) | `com.jmk9633.familyphoto` (가칭, 서비스명 확정 시 변경) | `app.json` `ios.bundleIdentifier` |
+| 홈 화면 위젯 (8-1) | iOS 큰·중간 크기. 가장 최근 새 묶음의 첫 장 + '새 사진 N장'(그 묶음 장 수, 쉬운 홈과 같은 숫자) + 제목 + 'OO이 보냄 · 오늘'. 새 사진 없으면 남이 보낸 최근(없으면 내 것), 배지 숨김. 모든 가족 합쳐서. 위젯이 30분쯤마다 스스로 물어봄(실패 시 15분), 앱을 열 때·'봤어요' 기록 뒤 바로 다시 그림. 누르면 모드에 맞는 앱 홈. 위젯 노출은 '봤어요'·활동 아님 | `widget_feed`(0014) → Edge Function `widget` → `targets/widget`, 앱 `features/widget` |
+| 위젯 열쇠 | 폰마다 하나, 서버에는 SHA-256만, 한 사람 최근 5개까지. 로그아웃하면 서버·폰에서 지움, 계정 삭제 시 함께 삭제. 익명(쉬운 화면)도 만듦. 사진은 썸네일 5분짜리 서명 URL로만 | `create_widget_key`·`revoke_widget_key`·`widget_keys` RLS (0014) |
+| 앱 스킴 | `familyphoto` (가칭, 서비스명 확정 시 변경. 위젯의 `familyphoto://widget`도 함께) | `app.json` + Supabase Redirect URLs + `targets/widget` openURL + `features/widget/url.ts` |
+| iOS 앱 ID (번들 ID) | `com.jmk9633.familyphoto` (가칭, 서비스명 확정 시 변경). 위젯은 `com.jmk9633.familyphoto.widget`, App Group `group.com.jmk9633.familyphoto` | `app.json` `ios.bundleIdentifier`·`ios.entitlements`, `targets/widget/expo-target.config.js` |
 | 안드로이드 앱 ID (패키지 이름) | `com.jmk9633.familyphoto` (iOS와 같게, 가칭. 플레이 스토어에 올린 뒤에는 못 바꿈) | `app.json` `android.package` |
 
 ## 이미지·영상 처리 (앱에서)
@@ -129,6 +132,7 @@ supabase/tests      RLS 테스트 (pgTAP)
 
 ## 화면 규칙
 - 모든 문구는 한국어. 문구는 `src/copy/ko.ts`에 모아 둔다.
+  예외: 홈 화면 위젯은 앱의 JS를 읽을 수 없어 `targets/widget/FamilyPhotoWidget.swift`의 `Copy`에 모은다 (8-1).
 - 일반 모드 크기·색은 `src/components/tokens.ts`. 버튼 높이 56, 터치 영역 48 이상.
 - 쉬운 모드 크기 기준은 `src/components/easy/tokens.ts`에 고정한다:
   본문 18px 이상, 제목 24px, 주요 버튼 높이 64px 이상, 터치 영역 48px 이상, 강조색 1개.
@@ -166,7 +170,7 @@ eas build --profile preview         # 기기 테스트용 빌드
 5. 반응(하트)·'봤어요' + 애플 로그인 우회 제거 + 푸시 알림 (완료)
 6. 쉬운 모드 연결 (완료)
 7. 안부 확인 (MVP, 완료 10/25: 7-1 알림·응답 / 7-2 켜고 끄기·동의 / 7-3 새벽 정리 작업 / 7-4 사진 지우기·관리자 내리기·내보낼 때 사진)
-8. 홈 화면 위젯 (iOS부터)
+8. 홈 화면 위젯 (iOS부터. 8-1 iOS 위젯 확인 중 / 안드로이드는 iOS 확인 뒤 따로 정함)
 9. TV 앱 (삼성 Tizen부터)
 
 ## 알려진 제약
@@ -201,6 +205,16 @@ eas build --profile preview         # 기기 테스트용 빌드
 - 읽기 정책이 `can_see_post` 같은 security definer 함수인 테이블은 `.insert().select()`(RETURNING)와 `upsert`(on conflict)를 쓰지 않는다.
   같은 문장 안에서는 함수가 방금 넣은 행을 못 봐서 RLS 오류(42501)가 난다. ID는 앱에서 만들어 넣고 결과를 돌려받지 않는다
   (2단계 그룹 만들기, 3단계 묶음 만들기에서 실제로 겪음).
+
+- 홈 화면 위젯 (8-1, 10/25 결정): `@bacons/apple-targets`(승인 10/25 — expo-widgets는 위젯이 스스로 서버에 물어볼 수 없어 제외)가
+  `targets/widget`을 prebuild 때 Xcode 위젯 확장으로 만든다. `app.json`에 `ios.appleTeamId`(2LSRUZU8A8)·App Group이 있어야 한다.
+  애플 개발자 사이트에 App Group `group.com.jmk9633.familyphoto`를 등록하고 앱 ID에 연결해 둔다(사용자, 10/25).
+  `targets/widget`(Swift)이나 `app.json`을 바꾸면 `npx expo prebuild --platform ios --clean` → `npx expo run:ios --device`로 다시 빌드한다.
+  앱 쪽 JS(`features/widget`)만 바꾸면 다시 빌드할 필요 없다. 위젯 색 자산(`targets/*/Assets.xcassets`)은 prebuild가 만들므로 커밋하지 않는다.
+  위젯 함수 `widget`은 로그인 정보가 없으므로 JWT 확인을 끈다(`config.toml` `[functions.widget] verify_jwt = false`). 대신 위젯 열쇠를 확인한다.
+  배포: `npx supabase functions deploy widget --use-api --no-verify-jwt`.
+  애플이 위젯 갱신 횟수를 제한해서(애플 개발자 포럼 안내: 하루 약 72번) 새 사진이 위젯에 뜨기까지 30분 넘게 걸릴 수 있다 (알림을 받아 앱을 열면 바로 바뀐다).
+  위젯 확장은 Swift 5 모드, 최소 iOS 16.4 (iOS 17부터 바뀐 배경·여백은 `widgetBackground`·`widgetPadding`으로 나눠 처리).
 
 - 쉬운 모드 연결 (6단계, 10/18 결정):
   - 앱 첫 화면 `(auth)/start` = '가족이 알려준 숫자가 있어요' + '내 계정으로 시작하기' 두 버튼. QR 연결은 9단계(TV)와 함께.

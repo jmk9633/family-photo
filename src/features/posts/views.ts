@@ -1,4 +1,5 @@
 import { requestNotify } from '@/features/push/notify';
+import { refreshWidget } from '@/features/widget/widget';
 import { supabase } from '@/lib/supabase';
 
 // '봤어요' (F-BLIYTI, 개발 5단계).
@@ -26,7 +27,11 @@ export async function recordView(postId: string, userId: string): Promise<void> 
     return;
   }
   // 오늘 처음 본 기록이면 보낸 사람에게 '봤어요' 알림 (시청 표시를 껐으면 서버가 보내지 않는다)
-  if (!error) requestNotify('seen', postId);
+  if (!error) {
+    requestNotify('seen', postId);
+    // 홈 화면 위젯이 본 묶음 대신 다음 새 묶음(없으면 최근 사진)을 보여주게 다시 그린다 (8-1)
+    refreshWidget();
+  }
 }
 
 /** 묶음 ID → 본 사람 ID (처음 본 순, 한 사람은 한 번). 내가 보낸 묶음만 결과가 있다. */

@@ -418,3 +418,8 @@ enabled = true
 # 대신 함수가 DB의 일회용 표(claim_cleanup)를 확인한다.
 [functions.cleanup]
 verify_jwt = false
+
+# 홈 화면 위젯 (0014, 8-1): 위젯은 로그인 정보가 없으므로 로그인 확인(JWT)을 끄고,
+# 대신 함수가 위젯 열쇠(widget_feed)를 확인한다.
+[functions.widget]
+verify_jwt = false
