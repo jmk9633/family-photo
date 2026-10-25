@@ -2,6 +2,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -152,6 +153,11 @@ export function FeedList({ groups, groupIds, viewingGroupId, filter, monthHeader
       const first = loadedKey.current !== key;
       loadedKey.current = key;
       loadFirst(first ? 'initial' : 'silent');
+      // 이 화면이 떠 있는 채로 앱을 뒤로 보냈다가 다시 열면(위젯·앱 아이콘) 첫 페이지를 조용히 새로 읽는다 (8-1)
+      const sub = AppState.addEventListener('change', (s) => {
+        if (s === 'active') loadFirst('silent');
+      });
+      return () => sub.remove();
     }, [key, loadFirst]),
   );
 

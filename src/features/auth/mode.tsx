@@ -11,7 +11,7 @@ import {
 import { AppState } from 'react-native';
 
 import { touchActive } from '@/features/posts/api';
-import { syncWidget } from '@/features/widget/widget';
+import { refreshWidget, syncWidget } from '@/features/widget/widget';
 import { supabase } from '@/lib/supabase';
 
 import { useSession } from './session';
@@ -123,6 +123,8 @@ export function ModeProvider({ children }: { children: ReactNode }) {
     touch();
     syncWidget(active);
     const sub = AppState.addEventListener('change', (s) => {
+      // 앱을 나갈 때도 위젯을 다시 그린다 (앱을 보는 동안 온 새 사진이 홈 화면에 바로 보이게, 8-1)
+      if (s === 'background') refreshWidget();
       if (s !== 'active') return;
       touch();
       // 홈 화면 위젯(8-1): 열쇠 확인 + 다시 그리기. 위젯 노출은 활동이 아니라서 위 touch와 따로 둔다

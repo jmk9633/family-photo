@@ -114,7 +114,7 @@ targets/widget/     iOS 홈 화면 위젯 (SwiftUI, @bacons/apple-targets가 pre
 | 사진 보존 | 기간 제한 없음 | — |
 | 나간 사람의 사진 삭제 | 본인이 요청하면 즉시. 내보낼 때 관리자가 [사진도 지우기]를 고르면 함께 (기본은 남기기) | `posts_delete_self` 정책, `remove_member(…, true)` (0013) |
 | 사진 지우기·내리기 권한 | 내 사진은 나만 지움(일반·쉬운 화면 모두), 남의 사진은 받은 그룹의 관리자만 내림(알림 없음) | `deleteMyPost`, `take_down_post` (0013) |
-| 홈 화면 위젯 (8-1) | iOS 큰·중간 크기. 가장 최근 새 묶음의 첫 장 + '새 사진 N장'(그 묶음 장 수, 쉬운 홈과 같은 숫자) + 제목 + 'OO이 보냄 · 오늘'. 새 사진 없으면 남이 보낸 최근(없으면 내 것), 배지 숨김. 모든 가족 합쳐서. 위젯이 30분쯤마다 스스로 물어봄(실패 시 15분), 앱을 열 때·'봤어요' 기록 뒤 바로 다시 그림. 누르면 모드에 맞는 앱 홈. 위젯 노출은 '봤어요'·활동 아님 | `widget_feed`(0014) → Edge Function `widget` → `targets/widget`, 앱 `features/widget` |
+| 홈 화면 위젯 (8-1) | iOS 큰·중간 크기. 가장 최근 새 묶음의 첫 장 + '새 사진 N장'(그 묶음 장 수, 쉬운 홈과 같은 숫자) + 제목 + 'OO이 보냄 · 오늘'. 새 사진 없으면 남이 보낸 최근(없으면 내 것), 배지 숨김. 모든 가족 합쳐서. 위젯이 30분쯤마다 스스로 물어봄(실패 시 15분), 앱을 열 때·나갈 때·'봤어요' 기록 뒤 바로 다시 그림. 앱을 다시 열면 쉬운 홈·사진 탭도 새로 읽음(위젯을 눌러 들어와도 최신). 누르면 모드에 맞는 앱 홈. 위젯 노출은 '봤어요'·활동 아님 | `widget_feed`(0014) → Edge Function `widget` → `targets/widget`, 앱 `features/widget` |
 | 위젯 열쇠 | 폰마다 하나, 서버에는 SHA-256만, 한 사람 최근 5개까지. 로그아웃하면 서버·폰에서 지움, 계정 삭제 시 함께 삭제. 익명(쉬운 화면)도 만듦. 사진은 썸네일 5분짜리 서명 URL로만 | `create_widget_key`·`revoke_widget_key`·`widget_keys` RLS (0014) |
 | 앱 스킴 | `familyphoto` (가칭, 서비스명 확정 시 변경. 위젯의 `familyphoto://widget`도 함께) | `app.json` + Supabase Redirect URLs + `targets/widget` openURL + `features/widget/url.ts` |
 | iOS 앱 ID (번들 ID) | `com.jmk9633.familyphoto` (가칭, 서비스명 확정 시 변경). 위젯은 `com.jmk9633.familyphoto.widget`, App Group `group.com.jmk9633.familyphoto` | `app.json` `ios.bundleIdentifier`·`ios.entitlements`, `targets/widget/expo-target.config.js` |
@@ -170,7 +170,7 @@ eas build --profile preview         # 기기 테스트용 빌드
 5. 반응(하트)·'봤어요' + 애플 로그인 우회 제거 + 푸시 알림 (완료)
 6. 쉬운 모드 연결 (완료)
 7. 안부 확인 (MVP, 완료 10/25: 7-1 알림·응답 / 7-2 켜고 끄기·동의 / 7-3 새벽 정리 작업 / 7-4 사진 지우기·관리자 내리기·내보낼 때 사진)
-8. 홈 화면 위젯 (iOS부터. 8-1 iOS 위젯 확인 중 / 안드로이드는 iOS 확인 뒤 따로 정함)
+8. 홈 화면 위젯 (iOS부터. 8-1 iOS 위젯 완료 10/25 / 8-2 새 사진이 오면 위젯 바로 바꾸기(iOS 26 위젯 전용 신호) 진행 중 / 안드로이드는 따로 정함)
 9. TV 앱 (삼성 Tizen부터)
 
 ## 알려진 제약
@@ -215,6 +215,8 @@ eas build --profile preview         # 기기 테스트용 빌드
   배포: `npx supabase functions deploy widget --use-api --no-verify-jwt`.
   애플이 위젯 갱신 횟수를 제한해서(애플 개발자 포럼 안내: 하루 약 72번) 새 사진이 위젯에 뜨기까지 30분 넘게 걸릴 수 있다 (알림을 받아 앱을 열면 바로 바뀐다).
   위젯 확장은 Swift 5 모드, 최소 iOS 16.4 (iOS 17부터 바뀐 배경·여백은 `widgetBackground`·`widgetPadding`으로 나눠 처리).
+  개발 빌드에서는 앱이 꺼진 채 위젯을 누르면 '개발 서버 고르기' 화면이 먼저 뜬다(expo-dev-launcher가 링크로 켜지면 자동 연결을 건너뜀). 서버를 누르면 홈으로 간다. 출시 빌드에는 이 화면이 없다 (10/25 확인).
+  빌드 로그를 남길 때 `| tee`를 붙이면 expo가 기기를 물어보지 못해 멈춘다 → `npx expo run:ios --device "기기 이름" 2>&1 | tee ios-build.log`처럼 기기를 적는다.
 
 - 쉬운 모드 연결 (6단계, 10/18 결정):
   - 앱 첫 화면 `(auth)/start` = '가족이 알려준 숫자가 있어요' + '내 계정으로 시작하기' 두 버튼. QR 연결은 9단계(TV)와 함께.

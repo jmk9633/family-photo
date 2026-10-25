@@ -119,6 +119,12 @@ export default function EasyHome() {
           if (n > 0) load();
         })
         .catch(() => {});
+      // 홈이 떠 있는 채로 앱을 뒤로 보냈다가 다시 열면(위젯·알림·앱 아이콘) 새로 읽는다.
+      // 화면이 바뀌지 않아 위의 load가 다시 불리지 않으므로 (8-1 확인 중 발견, F-NGOJFO '앱을 열면 즉시 최신 상태로')
+      const sub = AppState.addEventListener('change', (s) => {
+        if (s === 'active') load();
+      });
+      return () => sub.remove();
     }, [load, me]),
   );
 
