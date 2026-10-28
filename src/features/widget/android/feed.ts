@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { readKey, STORE_KEYS, widgetEndpoint } from './store';
+import { readKey, readPushToken, STORE_KEYS, widgetEndpoint } from './store';
 
 // 안드로이드 위젯이 서버(Edge Function `widget`)에서 가장 최근 사진 한 건을 받아 오는 곳 (8-3).
 // iOS 위젯(targets/widget/FamilyPhotoWidget.swift의 Loader)과 같은 규칙:
@@ -8,6 +8,8 @@ import { readKey, STORE_KEYS, widgetEndpoint } from './store';
 //   - 사진은 썸네일(긴 변 480px)의 5분짜리 서명 URL로 받아 바로 내려받아 둔다(서명 URL은 다시 쓰지 않음).
 //   - 인터넷이 안 되면 마지막으로 받은 사진을 그대로 보여준다. 다른 열쇠(다른 사람)의 저장 사진은 보여주지 않는다.
 //   - 이 요청은 '봤어요'도 활동도 아니다 (서버가 아무것도 기록하지 않는다).
+//   - 8-3-2: 새 사진 신호를 받을 이 폰의 주소를 매번 함께 보낸다(iOS 8-2와 같은 방식). 위젯이 홈 화면에 있을 때만
+//     여기까지 오므로, 위젯을 놓은 폰만 신호를 받는다. 열쇠가 바뀌어도 다음 확인 때 서버가 새 열쇠로 옮긴다.
 
 export type WidgetState = 'ok' | 'connect' | 'empty' | 'unavailable';
 
@@ -157,11 +159,13 @@ async function fetchSnapshot(): Promise<Snapshot> {
     return state('connect');
   }
   const owner = key.slice(0, 16);
+  const pushToken = await readPushToken();
+  const body = pushToken ? { key, pushToken, pushEnv: 'expo' } : { key };
 
   try {
     const res = await fetchWithTimeout(
       widgetEndpoint(),
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) },
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
       15000,
     );
     if (!res.ok) throw new Error(`widget ${res.status}`);

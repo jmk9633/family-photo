@@ -12,6 +12,7 @@
 //   날짜('오늘'·'어제'·'10월 24일')는 위젯이 그릴 때 정한다 (그리는 시각이 받는 시각과 다를 수 있어서)
 //
 // 8-2 (0015): iOS 26 위젯은 애플에서 받은 '다시 그려' 신호 주소를 { pushToken, pushEnv }로 함께 보낸다.
+//   8-3-2 (0016): 안드로이드 위젯은 Expo 푸시 주소를 { pushToken, pushEnv: 'expo' }로 보낸다.
 //   매번 함께 보내므로 로그인을 바꿔 열쇠가 바뀌어도 다음 확인 때 새 열쇠로 옮겨진다. 저장은 set_widget_push_token.
 //
 // 배포: npx supabase functions deploy widget --use-api --no-verify-jwt
@@ -73,8 +74,9 @@ Deno.serve(async (req) => {
   try {
     const body = (await req.json()) as { key?: unknown; pushToken?: unknown; pushEnv?: unknown };
     if (typeof body.key === 'string') key = body.key;
-    if (typeof body.pushToken === 'string') pushToken = body.pushToken.toLowerCase();
     if (typeof body.pushEnv === 'string') pushEnv = body.pushEnv;
+    // 애플 주소(16진수)는 소문자로 맞춘다. 안드로이드 Expo 주소('ExponentPushToken[...]')는 대소문자를 바꾸면 안 된다
+    if (typeof body.pushToken === 'string') pushToken = pushEnv === 'expo' ? body.pushToken : body.pushToken.toLowerCase();
   } catch {
     // 아래에서 invalid
   }

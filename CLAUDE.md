@@ -119,6 +119,7 @@ index.ts            앱 시작 파일 (expo-router/entry + 안드로이드 위�
 | 홈 화면 위젯 (8-1) | iOS 큰·중간 크기. 가장 최근 새 묶음의 첫 장 + '새 사진 N장'(그 묶음 장 수, 쉬운 홈과 같은 숫자) + 제목 + 'OO이 보냄 · 오늘'. 새 사진 없으면 남이 보낸 최근(없으면 내 것), 배지 숨김. 모든 가족 합쳐서. 위젯이 30분쯤마다 스스로 물어봄(실패 시 15분), 앱을 열 때·나갈 때·'봤어요' 기록 뒤 바로 다시 그림. 앱을 다시 열면 쉬운 홈·사진 탭도 새로 읽음(위젯을 눌러 들어와도 최신). 누르면 모드에 맞는 앱 홈. 위젯 노출은 '봤어요'·활동 아님 | `widget_feed`(0014) → Edge Function `widget` → `targets/widget`, 앱 `features/widget` |
 | 홈 화면 위젯 — 안드로이드 (8-3-1 완료 10/28) | iOS와 같은 규칙·같은 서버(`widget`). 위젯 목록에 '가족 사진 크게'(4×4칸)·'가족 사진 작게'(4×2칸) 두 개(10/26 결정 — 모서리 끌어 크기 바꾸기는 어렵기 때문), 놓은 뒤 크기를 바꾸면 그 크기로 다시 그림. 30분마다 스스로 물어봄(안드로이드 최소값), 앱을 열 때·나갈 때·'봤어요' 뒤 다시 그림. 인터넷이 없으면 마지막 사진(다른 열쇠의 사진은 안 보임). 글씨 크기 고정(18 이상, 폰 글자 크기 설정에 따라 넘치지 않게) | `src/features/widget/widget.android.ts`, `android/`(feed·FamilyPhotoWidget·task), `register.android.ts`, `app.json` 플러그인 |
 | 위젯 바로 바꾸기 (8-2) | iOS 26 이상: 새 묶음이 완료되면 받은 가족(보낸 사람 제외)의 위젯에 '다시 그려' 신호(WidgetKit 푸시). 알림 허용·밤 시간과 상관없음(10/26 알림을 끈 아이폰에서도 바뀌는 것 확인), 화면에 아무것도 안 뜸. 그보다 오래된 폰은 30분 확인 그대로. 신호는 '봤어요'·활동 아님 | notify(new_post) → `_shared/widgetPush.ts` → APNs 직접, `widget_push_targets`·`set_widget_push_token`·`clear_widget_push_token` (0015) |
+| 위젯 바로 바꾸기 — 안드로이드 (8-3-2 완료 10/28) | 새 묶음이 완료되면 받은 가족(보낸 사람 제외)의 안드로이드 위젯에 화면에 안 뜨는 조용한 신호(Expo 푸시 → FCM 데이터 메시지 `{kind:'widget'}`, 우선순위 보통, 하루 보관). 앱이 화면 없이 깨어나 위젯만 다시 그림. 알림 허용·밤 시간과 상관없음, 안드로이드 버전 무관(구글 플레이 서비스 필요). 절전 중인 폰은 켤 때, '강제 중지'한 앱은 다시 열 때까지 안 바뀜. 신호는 '봤어요'·활동 아님 | notify(new_post) → `_shared/widgetPush.ts` `sendExpo`, `set_widget_push_token`의 `expo` 종류(0016), 앱 `android/push.ts`(할 일)·`widget.android.ts`(주소 받기) |
 | 위젯 열쇠 | 폰마다 하나, 서버에는 SHA-256만, 한 사람 최근 5개까지. 로그아웃하면 서버·폰에서 지움, 계정 삭제 시 함께 삭제. 익명(쉬운 화면)도 만듦. 사진은 썸네일 5분짜리 서명 URL로만 | `create_widget_key`·`revoke_widget_key`·`widget_keys` RLS (0014) |
 | 앱 스킴 | `familyphoto` (가칭, 서비스명 확정 시 변경. 위젯의 `familyphoto://widget`도 함께) | `app.json` + Supabase Redirect URLs + `targets/widget` openURL + `features/widget/url.ts` |
 | iOS 앱 ID (번들 ID) | `com.jmk9633.familyphoto` (가칭, 서비스명 확정 시 변경). 위젯은 `com.jmk9633.familyphoto.widget`, App Group `group.com.jmk9633.familyphoto` | `app.json` `ios.bundleIdentifier`·`ios.entitlements`, `targets/widget/expo-target.config.js` |
@@ -175,7 +176,7 @@ eas build --profile preview         # 기기 테스트용 빌드
 5. 반응(하트)·'봤어요' + 애플 로그인 우회 제거 + 푸시 알림 (완료)
 6. 쉬운 모드 연결 (완료)
 7. 안부 확인 (MVP, 완료 10/25: 7-1 알림·응답 / 7-2 켜고 끄기·동의 / 7-3 새벽 정리 작업 / 7-4 사진 지우기·관리자 내리기·내보낼 때 사진)
-8. 홈 화면 위젯 (iOS부터. 8-1 iOS 위젯 완료 10/25 / 8-2 새 사진이 오면 위젯 바로 바꾸기(iOS 26 위젯 전용 신호) 완료 10/26 / 8-3 안드로이드: 8-3-1 위젯 본체 완료 10/28, 8-3-2 새 사진 신호(알림 끈 폰 포함) 진행 중)
+8. 홈 화면 위젯 (완료 10/28. iOS부터. 8-1 iOS 위젯 완료 10/25 / 8-2 새 사진이 오면 위젯 바로 바꾸기(iOS 26 위젯 전용 신호) 완료 10/26 / 8-3 안드로이드 완료 10/28: 8-3-1 위젯 본체 / 8-3-2 새 사진 신호(알림 끈 가상 폰에서도 바뀌는 것 확인))
 9. TV 앱 (삼성 Tizen부터)
 
 ## 알려진 제약
@@ -237,6 +238,11 @@ eas build --profile preview         # 기기 테스트용 빌드
   위젯 열쇠·마지막 사진은 이 앱만 읽는 AsyncStorage(`widget:*`). 사진은 썸네일을 받아 바로 내려받아 둔다(서명 URL은 다시 쓰지 않음).
   위젯 라이브러리는 사진을 주어진 크기로 늘려 넣으므로, JPEG 가로·세로를 읽어 꽉 채울 크기를 계산한다(`jpegSize`·`coverSize`).
   `app.json`의 위젯 설정이나 라이브러리를 바꾸면 `npx expo prebuild --platform android --clean` → `npx expo run:android`. `src/features/widget` JS만 바꾸면 다시 빌드할 필요 없다.
+  8-3-2: 새 사진 신호 주소는 `getExpoPushTokenAsync`로 알림 권한 없이 받는다(안드로이드는 권한 확인을 하지 않음 — expo-notifications PushTokenModule).
+  알림 주소 표 `devices`에는 넣지 않는다(넣으면 알림을 끈 폰에도 사진 알림이 감). 위젯이 서버에 물을 때 `{pushToken, pushEnv:'expo'}`로 함께 보낸다.
+  신호를 받는 할 일(`expo-task-manager` + `Notifications.registerTaskAsync`)은 앱이 처음 읽는 `index.ts → register.android.ts`에서 정한다.
+  신호에 title·body를 넣으면 알림으로 떠 버리므로 data만 보낸다. `widget` 함수는 Expo 주소의 대소문자를 바꾸지 않는다(애플 주소만 소문자로).
+  위젯을 홈 화면에서 다 빼도 서버의 신호 주소는 남는다(신호가 와도 다시 그릴 위젯이 없어 서버에 묻지 않음). 앱을 지우면 Expo가 DeviceNotRegistered로 알려 지운다.
   위젯 모양 파일(`FamilyPhotoWidget.tsx`·`task.tsx`) 맨 위에는 `'use no memo';`가 있어야 한다. 없으면 React Compiler가 바꾼 함수 때문에 위젯을 놓을 때 'Invalid Hook Call'로 실패한다(10/28). 위젯 컴포넌트에 훅을 쓰지 않는다.
   `widget.ts`(iOS)와 `widget.android.ts`(안드로이드)는 같은 함수 이름이다. 안드로이드 전용 라이브러리는 `.android.ts` 파일에서만 불러온다(iOS에 그 네이티브 모듈이 없어서).
 

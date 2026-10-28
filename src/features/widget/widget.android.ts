@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
+import * as Notifications from 'expo-notifications';
 
 import { supabase } from '@/lib/supabase';
 
@@ -13,6 +15,8 @@ import { redrawAll } from './android/task';
 //   - 열쇠는 이 폰의 이 사람 것 하나. 다른 사람으로 로그인하면 새로 만들고, 로그아웃하면 서버와 폰에서 지운다.
 //   - 앱을 열 때·다시 화면에 올 때·나갈 때·'봤어요'가 새로 기록될 때 위젯을 다시 그린다.
 //   - 위젯이 사진을 보여주는 것은 '봤어요'도 활동도 아니다 (서버가 기록하지 않는다).
+//   - 8-3-2: 새 사진 신호를 받을 이 폰의 Expo 푸시 주소를 알림 권한과 상관없이 받아 둔다(안드로이드는 권한 없이도 주소가 나온다).
+//     알림 주소 표(devices)에는 넣지 않는다 — 그러면 알림을 끈 폰에도 사진 알림이 가게 된다. 위젯이 서버에 물을 때 함께 보낸다.
 // 위젯이 홈 화면에 없으면 다시 그리기는 아무것도 하지 않는다 (서버에도 묻지 않음).
 
 async function get(key: string): Promise<string | null> {
@@ -35,6 +39,18 @@ function redraw(): void {
   });
 }
 
+/** 새 사진 신호를 받을 이 폰의 Expo 푸시 주소를 받아 둔다 (알림 권한 필요 없음). 실패하면 30분 확인만 한다 */
+async function savePushToken(): Promise<void> {
+  try {
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+    if (!projectId) return;
+    const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    if (token && token !== (await get(STORE_KEYS.pushToken))) await AsyncStorage.setItem(STORE_KEYS.pushToken, token);
+  } catch (e) {
+    if (__DEV__) console.warn('[widget push token failed]', e);
+  }
+}
+
 let syncing: Promise<void> | null = null;
 
 /** 위젯 열쇠를 맞추고(없거나 다른 사람 것이거나 서버에서 지워졌으면 새로) 위젯을 다시 그린다. */
@@ -55,6 +71,7 @@ export function syncWidget(userId: string): Promise<void> {
         ]);
         await clearCache(); // 이전 열쇠로 받아 둔 사진은 버린다
       }
+      await savePushToken();
       redraw();
     } catch (e) {
       // 인터넷이 안 되면 다음에 앱을 열 때 다시 한다. 위젯은 저장해 둔 사진을 그대로 보여준다
