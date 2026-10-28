@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
 
-// 홈 화면 위젯 (개발 8-1, F-NGOJFO, 0014). 지금은 iOS만 (안드로이드는 iOS 확인 뒤 따로 정한다).
+// 홈 화면 위젯 — iOS (개발 8-1, F-NGOJFO, 0014). 안드로이드는 widget.android.ts (8-3, 같은 함수 이름·같은 규칙).
 //
 // 위젯은 앱과 따로 도는 프로그램이라 앱의 로그인 정보를 쓰지 않는다. 앱이 서버에서 '위젯 열쇠'를 받아
 // 앱과 위젯만 보는 공용 칸(App Group)에 넣어 두면, 위젯이 그 열쇠로 Edge Function `widget`에 최근 사진을 물어본다.

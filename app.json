@@ -56,7 +56,36 @@
           "recordAudioAndroid": true
         }
       ],
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "FamilyPhotoLarge",
+              "label": "가족 사진 크게",
+              "description": "가족이 보낸 최근 사진을 홈 화면에서 바로 봐요.",
+              "minWidth": "250dp",
+              "minHeight": "250dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 4,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "FamilyPhotoMedium",
+              "label": "가족 사진 작게",
+              "description": "가족이 보낸 최근 사진을 홈 화면에서 바로 봐요.",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -293,6 +293,18 @@ export const ko = {
       devSignOut: '로그아웃 (개발용)',
     },
   },
+  // 홈 화면 위젯 — 안드로이드 (8-3). 위젯을 앱의 JS로 그려서 여기 문구를 쓴다.
+  // iOS 위젯은 앱의 JS를 못 읽어 targets/widget/FamilyPhotoWidget.swift의 Copy에 같은 문구가 있다 (바꾸면 둘 다).
+  // 위젯 목록에 보이는 이름·설명은 app.json의 react-native-android-widget 설정에 있다.
+  widget: {
+    connect: '가족과 연결해 주세요',
+    empty: '가족이 사진을 보내면 여기에 보여요',
+    unavailable: '앱을 열면 사진을 다시 불러와요',
+    newCount: (n: number) => `새 사진 ${n}장`,
+    today: '오늘',
+    yesterday: '어제',
+    a11y: '가족 사진. 누르면 앱이 열려요',
+  },
   date: {
     month: (y: number, m: number) => `${y}년 ${m}월`,
     day: (m: number, d: number) => `${m}월 ${d}일`,

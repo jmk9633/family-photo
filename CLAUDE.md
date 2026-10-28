@@ -36,6 +36,8 @@ supabase/migrations 마이그레이션 SQL (번호 순서. 실제 DB에 한 번�
 supabase/functions  Edge Functions
 supabase/tests      RLS 테스트 (pgTAP)
 targets/widget/     iOS 홈 화면 위젯 (SwiftUI, @bacons/apple-targets가 prebuild 때 Xcode 확장으로 만든다)
+src/features/widget/android/  안드로이드 홈 화면 위젯 (react-native-android-widget, 앱의 JS로 그린다. 8-3)
+index.ts            앱 시작 파일 (expo-router/entry + 안드로이드 위젯 할 일 등록)
 ```
 
 ## 보안 규칙 (절대 어기지 말 것)
@@ -115,6 +117,7 @@ targets/widget/     iOS 홈 화면 위젯 (SwiftUI, @bacons/apple-targets가 pre
 | 나간 사람의 사진 삭제 | 본인이 요청하면 즉시. 내보낼 때 관리자가 [사진도 지우기]를 고르면 함께 (기본은 남기기) | `posts_delete_self` 정책, `remove_member(…, true)` (0013) |
 | 사진 지우기·내리기 권한 | 내 사진은 나만 지움(일반·쉬운 화면 모두), 남의 사진은 받은 그룹의 관리자만 내림(알림 없음) | `deleteMyPost`, `take_down_post` (0013) |
 | 홈 화면 위젯 (8-1) | iOS 큰·중간 크기. 가장 최근 새 묶음의 첫 장 + '새 사진 N장'(그 묶음 장 수, 쉬운 홈과 같은 숫자) + 제목 + 'OO이 보냄 · 오늘'. 새 사진 없으면 남이 보낸 최근(없으면 내 것), 배지 숨김. 모든 가족 합쳐서. 위젯이 30분쯤마다 스스로 물어봄(실패 시 15분), 앱을 열 때·나갈 때·'봤어요' 기록 뒤 바로 다시 그림. 앱을 다시 열면 쉬운 홈·사진 탭도 새로 읽음(위젯을 눌러 들어와도 최신). 누르면 모드에 맞는 앱 홈. 위젯 노출은 '봤어요'·활동 아님 | `widget_feed`(0014) → Edge Function `widget` → `targets/widget`, 앱 `features/widget` |
+| 홈 화면 위젯 — 안드로이드 (8-3-1 완료 10/28) | iOS와 같은 규칙·같은 서버(`widget`). 위젯 목록에 '가족 사진 크게'(4×4칸)·'가족 사진 작게'(4×2칸) 두 개(10/26 결정 — 모서리 끌어 크기 바꾸기는 어렵기 때문), 놓은 뒤 크기를 바꾸면 그 크기로 다시 그림. 30분마다 스스로 물어봄(안드로이드 최소값), 앱을 열 때·나갈 때·'봤어요' 뒤 다시 그림. 인터넷이 없으면 마지막 사진(다른 열쇠의 사진은 안 보임). 글씨 크기 고정(18 이상, 폰 글자 크기 설정에 따라 넘치지 않게) | `src/features/widget/widget.android.ts`, `android/`(feed·FamilyPhotoWidget·task), `register.android.ts`, `app.json` 플러그인 |
 | 위젯 바로 바꾸기 (8-2) | iOS 26 이상: 새 묶음이 완료되면 받은 가족(보낸 사람 제외)의 위젯에 '다시 그려' 신호(WidgetKit 푸시). 알림 허용·밤 시간과 상관없음(10/26 알림을 끈 아이폰에서도 바뀌는 것 확인), 화면에 아무것도 안 뜸. 그보다 오래된 폰은 30분 확인 그대로. 신호는 '봤어요'·활동 아님 | notify(new_post) → `_shared/widgetPush.ts` → APNs 직접, `widget_push_targets`·`set_widget_push_token`·`clear_widget_push_token` (0015) |
 | 위젯 열쇠 | 폰마다 하나, 서버에는 SHA-256만, 한 사람 최근 5개까지. 로그아웃하면 서버·폰에서 지움, 계정 삭제 시 함께 삭제. 익명(쉬운 화면)도 만듦. 사진은 썸네일 5분짜리 서명 URL로만 | `create_widget_key`·`revoke_widget_key`·`widget_keys` RLS (0014) |
 | 앱 스킴 | `familyphoto` (가칭, 서비스명 확정 시 변경. 위젯의 `familyphoto://widget`도 함께) | `app.json` + Supabase Redirect URLs + `targets/widget` openURL + `features/widget/url.ts` |
@@ -133,7 +136,8 @@ targets/widget/     iOS 홈 화면 위젯 (SwiftUI, @bacons/apple-targets가 pre
 
 ## 화면 규칙
 - 모든 문구는 한국어. 문구는 `src/copy/ko.ts`에 모아 둔다.
-  예외: 홈 화면 위젯은 앱의 JS를 읽을 수 없어 `targets/widget/FamilyPhotoWidget.swift`의 `Copy`에 모은다 (8-1).
+  예외: iOS 홈 화면 위젯은 앱의 JS를 읽을 수 없어 `targets/widget/FamilyPhotoWidget.swift`의 `Copy`에 모은다 (8-1).
+  안드로이드 위젯은 앱의 JS로 그려서 `ko.widget`을 쓴다 (8-3). 두 곳의 문구는 같게 유지한다. 위젯 목록의 이름·설명은 `app.json`.
 - 일반 모드 크기·색은 `src/components/tokens.ts`. 버튼 높이 56, 터치 영역 48 이상.
 - 쉬운 모드 크기 기준은 `src/components/easy/tokens.ts`에 고정한다:
   본문 18px 이상, 제목 24px, 주요 버튼 높이 64px 이상, 터치 영역 48px 이상, 강조색 1개.
@@ -171,7 +175,7 @@ eas build --profile preview         # 기기 테스트용 빌드
 5. 반응(하트)·'봤어요' + 애플 로그인 우회 제거 + 푸시 알림 (완료)
 6. 쉬운 모드 연결 (완료)
 7. 안부 확인 (MVP, 완료 10/25: 7-1 알림·응답 / 7-2 켜고 끄기·동의 / 7-3 새벽 정리 작업 / 7-4 사진 지우기·관리자 내리기·내보낼 때 사진)
-8. 홈 화면 위젯 (iOS부터. 8-1 iOS 위젯 완료 10/25 / 8-2 새 사진이 오면 위젯 바로 바꾸기(iOS 26 위젯 전용 신호) 완료 10/26 / 안드로이드는 따로 정함)
+8. 홈 화면 위젯 (iOS부터. 8-1 iOS 위젯 완료 10/25 / 8-2 새 사진이 오면 위젯 바로 바꾸기(iOS 26 위젯 전용 신호) 완료 10/26 / 8-3 안드로이드: 8-3-1 위젯 본체 완료 10/28, 8-3-2 새 사진 신호(알림 끈 폰 포함) 진행 중)
 9. TV 앱 (삼성 Tizen부터)
 
 ## 알려진 제약
@@ -226,6 +230,15 @@ eas build --profile preview         # 기기 테스트용 빌드
   위젯·App Group·푸시 권한처럼 서명 권한이 바뀐 뒤 첫 아이폰 빌드는 `npx expo run:ios --device`가 프로파일을 새로 못 받아 실패한다('No profiles for …widget', 'does not support the App Groups capability').
   → 한 번만 `xcodebuild -workspace ios/app.xcworkspace -scheme app -configuration Debug -destination 'id=<기기 ID>' -allowProvisioningUpdates build` 뒤 다시 `run:ios --device` (10/26). 시뮬레이터는 서명이 필요 없어 이 문제가 안 보인다.
   빌드 로그를 남길 때 `| tee`를 붙이면 expo가 기기를 물어보지 못해 멈춘다 → `npx expo run:ios --device "기기 이름" 2>&1 | tee ios-build.log`처럼 기기를 적는다.
+
+- 안드로이드 홈 화면 위젯 (8-3, 10/26 결정): `react-native-android-widget` 0.25.0(승인 10/26 — expo-widgets는 iOS 전용, Voltra는 안드로이드 12 미만에서 앱이 꺼지는 보고가 있어 제외)이
+  prebuild 때 위젯 등록(`.widget.FamilyPhotoLarge`·`FamilyPhotoMedium`)을 만든다. 위젯은 앱의 JS를 화면 없이 잠깐 켜서 그린다(`index.ts`에서 할 일 등록).
+  그래서 **개발 빌드에서는 `npx expo start`가 켜져 있어야 위젯이 새로 그려진다**(출시 빌드는 JS가 앱 안에 있어 상관없음).
+  위젯 열쇠·마지막 사진은 이 앱만 읽는 AsyncStorage(`widget:*`). 사진은 썸네일을 받아 바로 내려받아 둔다(서명 URL은 다시 쓰지 않음).
+  위젯 라이브러리는 사진을 주어진 크기로 늘려 넣으므로, JPEG 가로·세로를 읽어 꽉 채울 크기를 계산한다(`jpegSize`·`coverSize`).
+  `app.json`의 위젯 설정이나 라이브러리를 바꾸면 `npx expo prebuild --platform android --clean` → `npx expo run:android`. `src/features/widget` JS만 바꾸면 다시 빌드할 필요 없다.
+  위젯 모양 파일(`FamilyPhotoWidget.tsx`·`task.tsx`) 맨 위에는 `'use no memo';`가 있어야 한다. 없으면 React Compiler가 바꾼 함수 때문에 위젯을 놓을 때 'Invalid Hook Call'로 실패한다(10/28). 위젯 컴포넌트에 훅을 쓰지 않는다.
+  `widget.ts`(iOS)와 `widget.android.ts`(안드로이드)는 같은 함수 이름이다. 안드로이드 전용 라이브러리는 `.android.ts` 파일에서만 불러온다(iOS에 그 네이티브 모듈이 없어서).
 
 - 쉬운 모드 연결 (6단계, 10/18 결정):
   - 앱 첫 화면 `(auth)/start` = '가족이 알려준 숫자가 있어요' + '내 계정으로 시작하기' 두 버튼. QR 연결은 9단계(TV)와 함께.
